@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRouter } from "next/router";
 import Head from "next/head";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -7,14 +8,35 @@ import styles from "@/styles/session.module.css";
 
 const LOCAL_SESSION_KEY = "pt-form-coach-last-session";
 
+// REHAB26 per-rep models are the main coach; bird dog / side plank keeps the interval-rule coach.
+const EXERCISES = [
+  { id: "squat", en: "Squat", es: "Sentadilla" },
+  { id: "arm_abduction", en: "Shoulder abduction", es: "Abducción de hombro" },
+  { id: "shoulder_extension", en: "Shoulder extension", es: "Extensión de hombro" },
+  { id: "core_holds", en: "Bird dog / side plank", es: "Bird dog / plancha lateral" },
+];
+
 // MediaPipe + webcam must run client-only
 const PoseCamera = dynamic(() => import("@/components/PoseCamera"), {
   ssr: false,
   loading: () => <p className={styles.statusMsg}>Loading camera…</p>,
 });
+const RehabCamera = dynamic(() => import("@/components/RehabCamera"), {
+  ssr: false,
+  loading: () => <p className={styles.statusMsg}>Loading camera…</p>,
+});
 
 export default function SessionPage() {
+  const router = useRouter();
   const [language, setLanguage] = useState("en");
+  const queryEx = typeof router.query.ex === "string" ? router.query.ex : null;
+  const exercise = EXERCISES.some((e) => e.id === queryEx) ? queryEx : "squat";
+
+  function pickExercise(id) {
+    if (id === exercise) return;
+    setSaveMsg("");
+    router.replace({ pathname: "/session", query: { ex: id } }, undefined, { shallow: true });
+  }
   const [saveMsg, setSaveMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -121,7 +143,26 @@ export default function SessionPage() {
           </div>
         </header>
 
-        <PoseCamera language={language} patientId="demo-patient" />
+        <div className={styles.exPicker} role="radiogroup" aria-label={language === "es" ? "Ejercicio" : "Exercise"}>
+          {EXERCISES.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              role="radio"
+              aria-checked={exercise === e.id}
+              className={`${styles.exBtn} ${exercise === e.id ? styles.exBtnActive : ""}`}
+              onClick={() => pickExercise(e.id)}
+            >
+              {e[language] || e.en}
+            </button>
+          ))}
+        </div>
+
+        {exercise === "core_holds" ? (
+          <PoseCamera key="core_holds" language={language} patientId="demo-patient" />
+        ) : (
+          <RehabCamera key={exercise} exercise={exercise} language={language} patientId="demo-patient" />
+        )}
 
         {saveMsg && <p className={styles.privacyNote}>{saveMsg}</p>}
         <p className={styles.privacyNote}>

@@ -57,7 +57,39 @@ uvicorn main:app --reload --port 8000
 
 Without OCI credentials, the API writes sessions to `backend/data/sessions/` and uses a heuristic / local classifier.
 
-### Optional: train local classifier
+### Main model: REHAB26 per-rep mistake classifiers
+
+The live coach for **squat, shoulder abduction and shoulder extension** (the default on `/session`) runs
+per-exercise mistake classifiers trained on [REHAB26-ViewAngles](https://doi.org/10.5281/zenodo.23018127)
+(MediaPipe world landmarks, physiotherapist-labeled, CC BY-NC 4.0). Everything runs in the browser:
+
+```
+MediaPipe Pose (world landmarks) → setup gate (whole body in frame, facing camera, start pose, still)
+  → rep detection → rep validation (complete, deliberate reps only)
+  → 26 joint signals → 494 features → early model (reps 1-3) / calibrated-to-you model (rep 4+) → cue
+```
+
+| Path | What |
+|---|---|
+| `frontend/public/models/rehab26_*.json` | Trained models loaded by the site |
+| `frontend/lib/rehab/` | Features, rep detection, session rules (JS), cue text incl. Spanish |
+| `frontend/components/RehabCamera.js` | Live coaching UI |
+| `training/` | `train_rehab26.py`, `rehab_features.py` (Python mirror of `features.js`), `report.json` metrics |
+
+Leave-one-person-out, facing the camera: catches 92-96% of mistakes and names the right one 68-78% of the time
+(`training/report.json`). Retrain:
+
+```bash
+bash scripts/get_data.sh                       # ~690 MB of skeletons into data/rehab26/
+pip install -r training/requirements.txt
+python training/train_rehab26.py               # writes frontend/public/models/rehab26_*.json + tests/data/
+node tests/parity_test.mjs && node tests/sim_test.mjs   # JS == Python features; live replay on held-out people
+```
+
+`frontend/lib/rehab/features.js` and `training/rehab_features.py` must stay identical (`parity_test.mjs`).
+Bird dog / side plank still use the joint-interval coach (`PoseCamera` + `lib/liveCoach.js`).
+
+### Optional: train local classifier (legacy EC3D, backend `/score-rep`)
 
 ```bash
 cd model
@@ -87,10 +119,10 @@ Configure via `backend/.env` (see `.env.example`).
 ## Demo flow
 
 1. Open the app over HTTPS — no install  
-2. Calibration: 3 slow squats (personal baseline)  
-3. Correct squat → green skeleton  
-4. Cave a knee → joint turns red + voice: “Push your knees out”  
-5. Rep score card (OCI model or local fallback)  
+2. Pick Squat (default): stand back until your whole body is in frame, hold still for “Go”  
+3. Good squat → “1. Good.” and a green cue  
+4. Cave a knee → knees turn red + voice: “Knees out. Push your knees out so they track over your toes.”  
+5. Rep score card (REHAB26 model; calibrated to you after 3 reps)  
 6. PT dashboard (`pt` / `hacktn2026`) — quality chart + CPT 98985 note  
 7. Toggle **ES** for Spanish cues  
 
@@ -98,6 +130,7 @@ Configure via `backend/.env` (see `.env.example`).
 
 ## Dataset
 
+- **REHAB26-ViewAngles** (main model) — 5 people, squat / shoulder abduction / shoulder extension, physiotherapist-labeled mistakes, MediaPipe skeletons. CC BY-NC 4.0, doi:10.5281/zenodo.23018127. Downloaded by `scripts/get_data.sh`, not redistributed.
 - **UI-PRMD** — University of Idaho Physical Rehabilitation Movement Dataset (correct + incorrect PT exercises, skeleton data).  
 - Synthetic features matching our MediaPipe joint schema are used when UI-PRMD is not mounted (hackathon bootstrap).
 

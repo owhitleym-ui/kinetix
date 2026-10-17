@@ -351,3 +351,82 @@
     font-size: 1.1rem;
   }
 }
+
+/* Exercise picker (REHAB26 exercises first; bird dog / side plank last) */
+.exPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.exBtn {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.5rem 0.95rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.exBtn:hover {
+  border-color: var(--brand);
+}
+
+.exBtnActive {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.howto {
+  margin: 0;
+  color: var(--ink-muted);
+  line-height: 1.45;
+  max-width: 70ch;
+}
+
+/* Setup gate shown over the video until the user is framed, in position and still */
+.setupOverlay {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: min(92%, 460px);
+  padding: 0.85rem 1.1rem;
+  border-radius: 12px;
+  background: rgba(10, 20, 15, 0.78);
+  color: #fff;
+  text-align: center;
+}
+
+.setupTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.setupSub {
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.setupBar {
+  margin-top: 0.6rem;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.setupBar > span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+  transition: width 0.1s linear;
+}

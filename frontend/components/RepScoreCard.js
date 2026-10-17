@@ -1,6 +1,7 @@
+import { LABELS, labelName } from "@/lib/rehab/cues";
 import styles from "@/styles/session.module.css";
 
-export default function RepScoreCard({ score, repNumber }) {
+export default function RepScoreCard({ score, repNumber, language = "en" }) {
   if (!score) return null;
 
   const ok = score.quality === "correct";
@@ -17,7 +18,7 @@ export default function RepScoreCard({ score, repNumber }) {
       </div>
       <div className={styles.scoreQuality}>{ok ? "Correct" : "Needs work"}</div>
       {!ok && score.error_type && (
-        <div className={styles.scoreError}>{formatError(score.error_type)}</div>
+        <div className={styles.scoreError}>{formatError(score.error_type, language)}</div>
       )}
       <div className={styles.scoreConf}>
         Confidence {(score.confidence * 100).toFixed(0)}%
@@ -28,6 +29,8 @@ export default function RepScoreCard({ score, repNumber }) {
 
 function sourceLabel(source) {
   const map = {
+    rehab26_early: "REHAB26 model",
+    rehab26_calibrated: "REHAB26 · calibrated",
     joint_intervals: "interval rules",
     ec3d_mistake: "EC3D model",
     ec3d_quality: "EC3D quality",
@@ -39,7 +42,8 @@ function sourceLabel(source) {
   return map[source] || source || "model";
 }
 
-function formatError(t) {
+function formatError(t, language = "en") {
+  if (LABELS.en[t]) return labelName(t, language);
   const map = {
     knee_cave: "Knees inward",
     back_round: "Torso lean",
