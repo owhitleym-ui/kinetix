@@ -15,6 +15,7 @@ export default function Document() {
           rel="stylesheet"
         />
         {/* Plain script tag — next/script beforeInteractive can remount and break MediaPipe WASM */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script
           src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"
           crossOrigin="anonymous"
