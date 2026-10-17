@@ -28,6 +28,27 @@ const JOINT = { ls: 11, rs: 12, le: 13, re: 14, lw: 15, rw: 16, lh: 23, rh: 24, 
 const BONES = [["ls", "rs"], ["ls", "le"], ["le", "lw"], ["rs", "re"], ["re", "rw"], ["neck", "pelvis"], ["pelvis", "lh"],
   ["pelvis", "rh"], ["lh", "lk"], ["lk", "la"], ["rh", "rk"], ["rk", "ra"], ["la", "lt"], ["ra", "rt"]];
 const DOTS = ["ls", "rs", "le", "re", "lw", "rw", "neck", "pelvis", "lh", "rh", "lk", "rk", "la", "ra"];
+// Which joints light up red for each mistake (same idea as main's SkeletonOverlay).
+const HIGHLIGHT = {
+  ERR_KNEES_INSIDE: ["lk", "rk", "la", "ra"],
+  ERR_TORSO_TO_SIDE: ["ls", "rs", "lh", "rh", "neck", "pelvis"],
+  ERR_SHALLOW_SQUAT: ["lh", "rh", "lk", "rk"],
+  ERR_KNEES_FORWARD: ["lk", "rk", "la", "ra"],
+  ERR_LIFTED_HEELS: ["la", "ra", "lt", "rt"],
+  ERR_ARM_FORWARD: ["rs", "re", "rw"],
+  ERR_ELEVATED_SHOULDER: ["rs", "ls", "neck"],
+  ERR_HEAD_TO_SIDE: ["ls", "rs", "neck"],
+  ERR_LOW_ABDUCTION: ["rs", "re", "rw"],
+  ERR_BENT_ARM: ["rs", "re", "rw"],
+  ERR_TORSO_FORWARD: ["ls", "rs", "lh", "rh", "neck", "pelvis"],
+  ERR_TORSO_ROTATION: ["ls", "rs", "lh", "rh", "neck", "pelvis"],
+  ERR_ARM_TO_SIDE: ["rs", "re", "rw"],
+};
+const BONE_OK = "rgba(255,255,255,0.95)";
+const BONE_BAD = "#ef4444";
+const DOT_OK = "#ffffff";
+const DOT_BAD = "#ef4444";
+const HIGHLIGHT_MS = 3200;
 // Joint angles drawn on the video: [label, a, b (vertex), c] as MediaPipe indices.
 const ANGLES = {
   squat: [["L knee", 23, 25, 27], ["R knee", 24, 26, 28]],
@@ -62,6 +83,22 @@ let landmarker, model, seg, cal, gate, stream, running = false, lastTime = -1;
 let phase = "setup", outFrames = 0, repCount = 0, calAmps = [], chipTimer;
 let facingHist = [], fpsT = [], tally = { n: 0, exact: 0, binary: 0 };
 let smoothImg = null, shownAngle = {}, smoothAngle = {};
+let highlightKeys = new Set(), highlightUntil = 0;
+
+function setHighlight(label) {
+  const keys = HIGHLIGHT[label];
+  if (!keys?.length) { highlightKeys = new Set(); highlightUntil = 0; return; }
+  highlightKeys = new Set(keys);
+  highlightUntil = performance.now() + HIGHLIGHT_MS;
+}
+function clearHighlight() { highlightKeys = new Set(); highlightUntil = 0; }
+function activeHighlight() {
+  if (!highlightKeys.size || performance.now() > highlightUntil) {
+    if (highlightKeys.size) clearHighlight();
+    return null;
+  }
+  return highlightKeys;
+}
 
 // ---------- MediaPipe + model ----------
 async function loadLandmarker() {
@@ -215,6 +252,7 @@ function onMovement(frames) {
   const good = out.label === "CORRECT", done = repCount === setSize();
   showCount(done ? "set complete ✓" : "");
   showChip(good ? `✓ Good form${done ? " · set complete" : ""}` : `${model.short[out.label]}${done ? " · set complete" : ""}`, good ? "good" : "bad");
+  if (good) clearHighlight(); else setHighlight(out.label);
 
   const expected = $("#expected").value;
   let tag = "";
@@ -478,20 +516,38 @@ function draw(res, world) {
   const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, v: Math.min(a.v, b.v) });
   p.neck = mid(p.ls, p.rs); p.pelvis = mid(p.lh, p.rh);
 
+  const bad = activeHighlight();
   ctx.save();
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = px(6);
-  ctx.strokeStyle = "rgba(255,255,255,0.95)"; ctx.lineWidth = px(4.5);
-  ctx.beginPath();
+  ctx.lineWidth = px(4.5);
+  // Draw each bone separately so offending segments can turn red (like main SkeletonOverlay).
   for (const [a, b] of BONES) {
-    if (p[a].v < 0.4 || p[b].v < 0.4) continue;    // skip joints MediaPipe is guessing
+    if (p[a].v < 0.4 || p[b].v < 0.4) continue;
+    const hot = bad && (bad.has(a) || bad.has(b));
+    ctx.strokeStyle = hot ? BONE_BAD : BONE_OK;
+    ctx.shadowColor = hot ? "rgba(239,68,68,0.45)" : "rgba(0,0,0,0.35)";
+    ctx.beginPath();
     ctx.moveTo(p[a].x, p[a].y); ctx.lineTo(p[b].x, p[b].y);
+    ctx.stroke();
   }
-  ctx.stroke();
-  ctx.shadowBlur = 0; ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = px(1.5);
+  ctx.shadowBlur = 0;
   for (const k of DOTS) {
     if (p[k].v < 0.4) continue;
-    ctx.beginPath(); ctx.arc(p[k].x, p[k].y, px(5.5), 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    const hot = bad && bad.has(k);
+    ctx.beginPath();
+    ctx.arc(p[k].x, p[k].y, px(hot ? 7.5 : 5.5), 0, 2 * Math.PI);
+    ctx.fillStyle = hot ? DOT_BAD : DOT_OK;
+    ctx.fill();
+    if (hot) {
+      ctx.strokeStyle = "rgba(239,68,68,0.4)";
+      ctx.lineWidth = px(5);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctx.lineWidth = px(1.5);
+      ctx.stroke();
+    }
   }
   if (world && model) drawAngles(world, px, W, H);
   ctx.restore();
@@ -569,6 +625,7 @@ async function start() {
     await loadLandmarker();
     seg.reset(); gate.reset(); cal = new Calibrator(model.calibration); calAmps = [];
     phase = "setup"; outFrames = 0; repCount = 0; lastTime = -1; facingHist = []; smoothImg = null; shownAngle = {}; smoothAngle = {};
+    clearHighlight();
     $("#latest").innerHTML = `<div class="muted">${CALIBRATE}</div>`;
     showCount("get into position"); resetLog(); resetCoachUi();
     sessionMemory.start({ exercise: model.exercise, target: setSize() });
