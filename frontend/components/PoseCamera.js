@@ -4,6 +4,7 @@ import {
   accumulateFrame,
   createEmptyBaseline,
   finalizeBaseline,
+  serializeBaseline,
 } from "@/lib/baseline";
 import {
   createPhaseTracker,
@@ -13,13 +14,14 @@ import {
 } from "@/lib/corrections";
 import { createPose, startCamera } from "@/lib/poseDetection";
 import { speakCue } from "@/lib/voice";
-import { scoreRep } from "@/lib/ociClient";
+import { generateCue, scoreRep } from "@/lib/ociClient";
 import { drawSkeleton } from "@/components/SkeletonOverlay";
 import CorrectionCue from "@/components/CorrectionCue";
 import RepScoreCard from "@/components/RepScoreCard";
 import styles from "@/styles/session.module.css";
 
 const CALIBRATION_REPS = 3;
+const GENAI_THROTTLE_MS = 3000;
 
 /**
  * Webcam + MediaPipe + calibration + live corrections.
@@ -37,6 +39,8 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
   const languageRef = useRef(language);
   const sessionFramesRef = useRef([]);
   const highlightRef = useRef([]);
+  const lastGenAiKeyRef = useRef(null);
+  const lastGenAiAtRef = useRef(0);
 
   const [mode, setMode] = useState("loading"); // loading | calibrate | coaching | done | error
   const [statusMsg, setStatusMsg] = useState("Loading pose model…");
@@ -57,6 +61,19 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
   const patientIdRef = useRef(patientId);
   patientIdRef.current = patientId;
+
+  const stopSession = () => {
+    cameraRef.current?.stop();
+    cameraRef.current = null;
+    poseRef.current?.close?.();
+    poseRef.current = null;
+    setMode("done");
+    setStatusMsg(
+      languageRef.current === "es" ? "Sesión terminada" : "Session ended"
+    );
+    setCue(null);
+    highlightRef.current = [];
+  };
 
   const handleRepCompleteRef = useRef(null);
   handleRepCompleteRef.current = async (completed) => {
@@ -103,11 +120,40 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
     }
   };
 
+  const requestGenAiCue = (correction) => {
+    const key = `${correction.errorType}:${languageRef.current}`;
+    const now = Date.now();
+    if (
+      key === lastGenAiKeyRef.current &&
+      now - lastGenAiAtRef.current < GENAI_THROTTLE_MS
+    ) {
+      return;
+    }
+    lastGenAiKeyRef.current = key;
+    lastGenAiAtRef.current = now;
+
+    const errorType = correction.errorType;
+    generateCue({
+      errorType,
+      baseline: correction.baseline ?? 0,
+      current: correction.current ?? 0,
+      language: languageRef.current,
+    }).then((res) => {
+      if (!res?.cue) return;
+      if (modeRef.current !== "coaching") return;
+      setCue((prev) => {
+        if (prev?.errorType && prev.errorType !== errorType) return prev;
+        return { text: res.cue, errorType, source: res.source };
+      });
+    });
+  };
+
   const onResultsRef = useRef(null);
   onResultsRef.current = (results) => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || !results.poseLandmarks) return;
+    if (modeRef.current === "done") return;
 
     const w = video.videoWidth || 640;
     const h = video.videoHeight || 480;
@@ -144,8 +190,9 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
     if (correction) {
       const text = getCueText(correction.errorType, languageRef.current);
-      setCue({ text, errorType: correction.errorType });
+      setCue({ text, errorType: correction.errorType, source: "local" });
       speakCue(text, languageRef.current);
+      requestGenAiCue(correction);
     }
 
     if (tracker.lastCompletedRep) {
@@ -161,15 +208,31 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
     async function init() {
       try {
         setStatusMsg("Starting camera…");
+        // Wait for video element to mount
+        if (!videoRef.current) {
+          await new Promise((r) => requestAnimationFrame(r));
+        }
         const pose = await createPose((results) => {
           if (!cancelled) onResultsRef.current?.(results);
         });
-        if (cancelled) return;
+        if (cancelled) {
+          try {
+            pose.close?.();
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
         poseRef.current = pose;
 
         const cam = await startCamera(videoRef.current, pose);
         if (cancelled) {
           cam.stop();
+          try {
+            pose.close?.();
+          } catch {
+            /* ignore */
+          }
           return;
         }
         cameraRef.current = cam;
@@ -178,7 +241,13 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       } catch (err) {
         console.error(err);
         if (!cancelled) {
-          setError(err.message || "Camera / pose init failed");
+          const msg = String(err?.message || err || "Camera / pose init failed");
+          // Common after HMR / double-init — soft hint to hard-refresh
+          if (msg.includes("arguments") || msg.includes("Aborted")) {
+            setError("Pose model crashed — hard refresh the page (Ctrl+Shift+R)");
+          } else {
+            setError(msg);
+          }
           setMode("error");
         }
       }
@@ -189,7 +258,14 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
     return () => {
       cancelled = true;
       cameraRef.current?.stop();
-      poseRef.current?.close?.();
+      cameraRef.current = null;
+      // Prefer stopping the camera loop before closing WASM
+      try {
+        poseRef.current?.close?.();
+      } catch {
+        /* ignore */
+      }
+      poseRef.current = null;
     };
   }, []);
 
@@ -198,6 +274,7 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       patient_id: patientIdRef.current,
       timestamp: new Date().toISOString(),
       exercise: "squat",
+      baseline: serializeBaseline(baselineRef.current),
       reps: sessionFramesRef.current.map((r) => ({
         rep: r.rep,
         score: r.score,
@@ -207,6 +284,7 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         })),
       })),
     });
+    window.__ptStopSession = stopSession;
     window.__ptSessionMode = mode;
   }, [mode]);
 
@@ -230,6 +308,7 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         <CorrectionCue
           text={cue?.text}
           errorType={cue?.errorType}
+          language={language}
           visible={!!cue?.text && mode === "coaching"}
         />
 
@@ -255,6 +334,12 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
             />
             <Stat label="Phase" value={phase} />
           </>
+        )}
+        {mode === "done" && (
+          <Stat
+            label={language === "es" ? "Estado" : "Status"}
+            value={language === "es" ? "Guardada" : "Saved"}
+          />
         )}
         <p className={styles.statusMsg}>{error || statusMsg}</p>
       </div>

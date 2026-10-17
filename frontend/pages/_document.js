@@ -1,5 +1,4 @@
 import { Html, Head, Main, NextScript } from "next/document";
-import Script from "next/script";
 
 export default function Document() {
   return (
@@ -15,9 +14,9 @@ export default function Document() {
           href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
           rel="stylesheet"
         />
-        <Script
-          src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"
-          strategy="beforeInteractive"
+        {/* Plain script tag — next/script beforeInteractive can remount and break MediaPipe WASM */}
+        <script
+          src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"
           crossOrigin="anonymous"
         />
       </Head>

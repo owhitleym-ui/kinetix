@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import { logSession } from "@/lib/ociClient";
 import styles from "@/styles/session.module.css";
 
+const LOCAL_SESSION_KEY = "pt-form-coach-last-session";
+
 // MediaPipe + webcam must run client-only
 const PoseCamera = dynamic(() => import("@/components/PoseCamera"), {
   ssr: false,
@@ -33,18 +35,36 @@ export default function SessionPage() {
         setSaving(false);
         return;
       }
-      await logSession(payload);
-      setSaveMsg(
-        language === "es"
-          ? "Sesión guardada en OCI Object Storage (solo keypoints)."
-          : "Session saved to OCI Object Storage (keypoints only)."
-      );
-    } catch (err) {
-      setSaveMsg(
-        language === "es"
-          ? `No se pudo guardar (¿backend activo?): ${err.message}`
-          : `Could not save (is the backend running?): ${err.message}`
-      );
+
+      try {
+        await logSession(payload);
+        setSaveMsg(
+          language === "es"
+            ? "Sesión guardada (solo keypoints)."
+            : "Session saved (keypoints only)."
+        );
+      } catch (err) {
+        try {
+          localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(payload));
+          setSaveMsg(
+            language === "es"
+              ? `Backend no disponible — sesión guardada en este dispositivo. (${err.message})`
+              : `Backend unavailable — session saved on this device. (${err.message})`
+          );
+        } catch {
+          setSaveMsg(
+            language === "es"
+              ? `No se pudo guardar: ${err.message}`
+              : `Could not save: ${err.message}`
+          );
+          setSaving(false);
+          return;
+        }
+      }
+
+      if (typeof window !== "undefined" && window.__ptStopSession) {
+        window.__ptStopSession();
+      }
     } finally {
       setSaving(false);
     }

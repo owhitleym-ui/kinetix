@@ -52,6 +52,7 @@ class SessionPayload(BaseModel):
     patient_id: str
     timestamp: Optional[str] = None
     exercise: str = "squat"
+    baseline: Optional[dict[str, Any]] = None
     reps: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -112,15 +113,15 @@ def score_rep(payload: ScoreRepPayload):
 
 @app.post("/generate-cue")
 def generate_cue(req: CueRequest):
-    """OCI GenAI plain-language correction cue."""
+    """OCI GenAI plain-language correction cue (local template fallback)."""
     try:
-        text = generate_correction_cue(
+        text, source = generate_correction_cue(
             error_type=req.error_type,
             baseline=req.baseline,
             current=req.current,
             language=req.language,
         )
-        return {"cue": text, "source": "oci_genai"}
+        return {"cue": text, "source": source}
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

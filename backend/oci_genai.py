@@ -6,7 +6,7 @@ Falls back to curated local cues when GenAI is not configured.
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 LOCAL_CUES = {
     "en": {
@@ -29,13 +29,19 @@ def generate_correction_cue(
     baseline: float,
     current: float,
     language: str = "en",
-) -> str:
+) -> Tuple[str, str]:
+    """
+    Returns (cue_text, source) where source is "oci_genai" or "local".
+    """
     if os.getenv("OCI_GENAI_ENDPOINT") or os.getenv("OCI_GENAI_COMPARTMENT_ID"):
         cue = _call_oci_genai(error_type, baseline, current, language)
         if cue:
-            return cue
+            return cue, "oci_genai"
     lang = language if language in LOCAL_CUES else "en"
-    return LOCAL_CUES[lang].get(error_type) or LOCAL_CUES["en"].get(error_type, "Adjust your form")
+    text = LOCAL_CUES[lang].get(error_type) or LOCAL_CUES["en"].get(
+        error_type, "Adjust your form"
+    )
+    return text, "local"
 
 
 def _call_oci_genai(

@@ -6,24 +6,36 @@
 import { LM } from "@/lib/jointAngles";
 
 const CONNECTIONS = [
+  // Head / neck
+  [LM.NOSE, LM.LEFT_SHOULDER],
+  [LM.NOSE, LM.RIGHT_SHOULDER],
+  // Arms
+  [LM.LEFT_SHOULDER, LM.LEFT_ELBOW],
+  [LM.LEFT_ELBOW, LM.LEFT_WRIST],
+  [LM.RIGHT_SHOULDER, LM.RIGHT_ELBOW],
+  [LM.RIGHT_ELBOW, LM.RIGHT_WRIST],
+  // Torso
   [LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER],
   [LM.LEFT_SHOULDER, LM.LEFT_HIP],
   [LM.RIGHT_SHOULDER, LM.RIGHT_HIP],
   [LM.LEFT_HIP, LM.RIGHT_HIP],
-  [LM.LEFT_SHOULDER, LM.LEFT_KNEE], // via hip — draw hip-knee separately
+  // Legs
   [LM.LEFT_HIP, LM.LEFT_KNEE],
   [LM.LEFT_KNEE, LM.LEFT_ANKLE],
   [LM.LEFT_ANKLE, LM.LEFT_FOOT_INDEX],
   [LM.RIGHT_HIP, LM.RIGHT_KNEE],
   [LM.RIGHT_KNEE, LM.RIGHT_ANKLE],
   [LM.RIGHT_ANKLE, LM.RIGHT_FOOT_INDEX],
-  [LM.LEFT_SHOULDER, LM.LEFT_HIP],
-  [LM.RIGHT_SHOULDER, LM.RIGHT_HIP],
 ];
 
 const JOINT_NAME_TO_INDEX = {
+  nose: LM.NOSE,
   left_shoulder: LM.LEFT_SHOULDER,
   right_shoulder: LM.RIGHT_SHOULDER,
+  left_elbow: LM.LEFT_ELBOW,
+  right_elbow: LM.RIGHT_ELBOW,
+  left_wrist: LM.LEFT_WRIST,
+  right_wrist: LM.RIGHT_WRIST,
   left_hip: LM.LEFT_HIP,
   right_hip: LM.RIGHT_HIP,
   left_knee: LM.LEFT_KNEE,
@@ -33,6 +45,8 @@ const JOINT_NAME_TO_INDEX = {
   left_foot: LM.LEFT_FOOT_INDEX,
   right_foot: LM.RIGHT_FOOT_INDEX,
 };
+
+const MAJOR_JOINTS = new Set(Object.values(JOINT_NAME_TO_INDEX));
 
 const GOOD = "#2dd4a8";
 const BAD = "#ef4444";
@@ -69,9 +83,7 @@ export function drawSkeleton(ctx, landmarks, width, height, highlightJoints = []
   for (let i = 0; i < landmarks.length; i++) {
     const p = landmarks[i];
     if (!p || (p.visibility ?? 1) < 0.5) continue;
-    // Only draw major joints for clarity
-    const major = Object.values(JOINT_NAME_TO_INDEX).includes(i);
-    if (!major) continue;
+    if (!MAJOR_JOINTS.has(i)) continue;
     const bad = highlightSet.has(i);
     ctx.beginPath();
     ctx.arc(p.x * width, p.y * height, bad ? 10 : 7, 0, Math.PI * 2);
