@@ -1,0 +1,92 @@
+{
+  "arm_abduction": {
+    "good_left_alone": 0.693,
+    "mistakes_caught": 0.96,
+    "mistakes_named_right": 0.678,
+    "exact": 0.686,
+    "n": 455,
+    "early": {
+      "good_left_alone": 0.8,
+      "mistakes_caught": null,
+      "mistakes_named_right": null,
+      "exact": 0.8,
+      "n": 45
+    },
+    "calibrated": {
+      "good_left_alone": 0.667,
+      "mistakes_caught": 0.96,
+      "mistakes_named_right": 0.678,
+      "exact": 0.673,
+      "n": 410
+    },
+    "recall": {
+      "CORRECT": 0.693,
+      "ERR_ARM_FORWARD": 0.609,
+      "ERR_BENT_ARM": 0.467,
+      "ERR_ELEVATED_SHOULDER": 0.6,
+      "ERR_HEAD_TO_SIDE": 0.891,
+      "ERR_LOW_ABDUCTION": 0.822
+    },
+    "people": 5
+  },
+  "squat": {
+    "good_left_alone": 0.717,
+    "mistakes_caught": 0.925,
+    "mistakes_named_right": 0.709,
+    "exact": 0.713,
+    "n": 453,
+    "early": {
+      "good_left_alone": 0.578,
+      "mistakes_caught": null,
+      "mistakes_named_right": null,
+      "exact": 0.578,
+      "n": 45
+    },
+    "calibrated": {
+      "good_left_alone": 0.751,
+      "mistakes_caught": 0.925,
+      "mistakes_named_right": 0.709,
+      "exact": 0.728,
+      "n": 408
+    },
+    "recall": {
+      "CORRECT": 0.717,
+      "ERR_KNEES_FORWARD": 0.8,
+      "ERR_KNEES_INSIDE": 0.804,
+      "ERR_LIFTED_HEELS": 0.578,
+      "ERR_SHALLOW_SQUAT": 0.935,
+      "ERR_TORSO_TO_SIDE": 0.422
+    },
+    "people": 5
+  },
+  "shoulder_extension": {
+    "good_left_alone": 0.746,
+    "mistakes_caught": 0.938,
+    "mistakes_named_right": 0.775,
+    "exact": 0.76,
+    "n": 455,
+    "early": {
+      "good_left_alone": 0.733,
+      "mistakes_caught": null,
+      "mistakes_named_right": null,
+      "exact": 0.733,
+      "n": 45
+    },
+    "calibrated": {
+      "good_left_alone": 0.749,
+      "mistakes_caught": 0.938,
+      "mistakes_named_right": 0.775,
+      "exact": 0.763,
+      "n": 410
+    },
+    "recall": {
+      "CORRECT": 0.746,
+      "ERR_ARM_TO_SIDE": 0.935,
+      "ERR_BENT_ARM": 0.5,
+      "ERR_ELEVATED_SHOULDER": 0.756,
+      "ERR_TORSO_FORWARD": 0.778,
+      "ERR_TORSO_ROTATION": 0.911
+    },
+    "people": 5
+  }
+}
