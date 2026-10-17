@@ -384,6 +384,133 @@ function stop() {
   $("#start").disabled = false; $("#stop").disabled = true;
 }
 
+// A short, camera-free preparation sequence before the form check.
+const WARMUP = [
+  [60, "March in place", "Easy pace, small knee lifts, relaxed arms.", "warmups/cropped/march-in-place.gif"],
+  [30, "Shoulder rolls", "Roll forward for 15 seconds, then reverse direction for 15 seconds.", "warmups/cropped/shoulder-rolls.gif"],
+  [30, "Arm circles", "Make small circles and switch direction halfway through.", "warmups/cropped/arm-circles.gif"],
+  [30, "Standing side bend", "Move slowly and gently, alternating sides.", "warmups/cropped/standing-side-bend.gif"],
+  [30, "Hip circles", "Place your hands on your hips and switch direction halfway through.", "warmups/cropped/hip-circles.gif"],
+  [30, "Knee circles", "Keep your knees slightly bent and make small circles.", "warmups/cropped/knee-circles.gif"],
+  [40, "Ankle circles", "Circle one ankle for 20 seconds, then switch sides.", "warmups/cropped/ankle-circles.gif"],
+  [30, "Calf raises", "Rise slowly onto your toes, then lower slowly with control.", "warmups/cropped/calf-raises.gif"],
+  [20, "Breathe and reset", "Take a few slow, deep breaths, then start your home exercise program.", null],
+];
+const warmupPhase = (i) => (i === 0 ? "warm" : i <= 6 ? "mobilize" : "reset");
+const WARMUP_PHASE_NAMES = { warm: "Get warm", mobilize: "Mobilize", reset: "Reset" };
+const RING_C = 2 * Math.PI * 70;
+const warmupTotal = WARMUP.reduce((sum, [seconds]) => sum + seconds, 0);
+let warmupIndex = 0, warmupRemaining = WARMUP[0][0], warmupElapsed = 0, warmupRunning = false, warmupClock, warmupShown = -1;
+const formatTime = (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></svg>';
+
+WARMUP.forEach(([seconds], i) => {
+  const seg = document.createElement("span");
+  seg.className = "warmup-seg"; seg.dataset.phase = warmupPhase(i); seg.style.flexGrow = seconds;
+  seg.appendChild(document.createElement("i"));
+  $("#warmupSegments").appendChild(seg);
+});
+$("#warmupRing").style.strokeDasharray = RING_C;
+
+function renderWarmup() {
+  const [duration, title, instruction, gif] = WARMUP[warmupIndex];
+  const phase = warmupPhase(warmupIndex);
+  const screen = $("#warmupScreen");
+  screen.dataset.phase = phase;
+  screen.classList.toggle("is-ending", warmupRunning && warmupRemaining <= 3);
+  $("#warmupPhaseName").textContent = WARMUP_PHASE_NAMES[phase];
+  $("#warmupPhase").textContent = warmupIndex + 1;
+  $("#warmupElapsed").textContent = `${formatTime(warmupElapsed)} / ${formatTime(warmupTotal)}`;
+  document.querySelectorAll(".warmup-seg i").forEach((fill, i) => {
+    const pct = i < warmupIndex ? 100 : i > warmupIndex ? 0 : ((duration - warmupRemaining) / duration) * 100;
+    fill.style.width = `${pct}%`;
+  });
+
+  // Only swap the text and illustration when the move changes, so the GIF doesn't restart every tick.
+  if (warmupShown !== warmupIndex) {
+    warmupShown = warmupIndex;
+    $("#warmupTitle").textContent = title;
+    $("#warmupInstruction").textContent = instruction;
+    const img = $("#warmupGif");
+    img.hidden = !gif; $("#warmupRest").hidden = !!gif;
+    if (gif) { img.src = `assets/${gif}`; img.alt = `Animated illustration of ${title.toLowerCase()}`; }
+    for (const el of [$("#warmupText"), gif ? img : $("#warmupRest")]) { el.classList.remove("warmup-swap"); void el.offsetWidth; el.classList.add("warmup-swap"); }
+    const next = WARMUP[warmupIndex + 1];
+    $("#warmupNextName").textContent = next ? next[1] : "Posture check";
+    $("#warmupNextTime").textContent = next ? formatTime(next[0]) : "";
+    $("#warmupNextThumb").innerHTML = next && next[3]
+      ? `<img src="assets/${next[3]}" alt="">`
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+    document.querySelectorAll(".warmup-step").forEach((step, i) => {
+      step.dataset.state = i < warmupIndex ? "done" : i === warmupIndex ? "current" : "todo";
+      step.setAttribute("aria-current", i === warmupIndex ? "step" : "false");
+    });
+  }
+  if (!gif) $("#warmupBreath").textContent = warmupRunning ? ((duration - warmupRemaining) % 8 < 4 ? "Breathe in…" : "Breathe out…") : "Breathe in…";
+
+  $("#warmupTime").textContent = formatTime(warmupRemaining);
+  $("#warmupTimeLabel").textContent = warmupRunning ? "Left" : (warmupElapsed ? "Paused" : "Ready");
+  $("#warmupRing").style.strokeDashoffset = RING_C * (1 - warmupRemaining / duration);
+  $("#warmupStart").innerHTML = warmupRunning ? `${ICON_PAUSE}Pause` : `${ICON_PLAY}${warmupElapsed ? "Resume" : "Start warm-up"}`;
+  $("#warmupNext").hidden = !warmupRunning;
+}
+function finishWarmup() {
+  warmupRunning = false; clearInterval(warmupClock);
+  const screen = $("#warmupScreen");
+  screen.classList.remove("is-ending"); screen.classList.add("is-complete");
+  const confetti = $("#warmupConfetti"); confetti.innerHTML = "";
+  const colors = ["#16a34a", "#22c55e", "#86efac", "#15803d", "#bbf7d0"];
+  for (let i = 0; i < 28; i++) {
+    const bit = document.createElement("i");
+    bit.style.left = `${Math.random() * 100}%`; bit.style.background = colors[i % colors.length];
+    bit.style.animationDelay = `${Math.random() * .6}s`;
+    confetti.appendChild(bit);
+  }
+  $("#warmupContinue").focus();
+}
+function advanceWarmup() {
+  warmupElapsed = WARMUP.slice(0, warmupIndex + 1).reduce((sum, [seconds]) => sum + seconds, 0);
+  if (warmupIndex >= WARMUP.length - 1) return finishWarmup();
+  warmupIndex++; warmupRemaining = WARMUP[warmupIndex][0]; renderWarmup();
+}
+function toggleWarmup() {
+  warmupRunning = !warmupRunning;
+  clearInterval(warmupClock);
+  if (warmupRunning) {
+    warmupClock = setInterval(() => {
+      warmupRemaining--; warmupElapsed++;
+      if (warmupRemaining <= 0) advanceWarmup();
+      else renderWarmup();
+    }, 1000);
+  }
+  renderWarmup();
+}
+function jumpToWarmup(index) {
+  warmupIndex = index; warmupRemaining = WARMUP[index][0];
+  warmupElapsed = WARMUP.slice(0, index).reduce((sum, [seconds]) => sum + seconds, 0);
+  renderWarmup();
+}
+function leaveWarmup() {
+  warmupRunning = false; clearInterval(warmupClock);
+  $("#warmupScreen").hidden = true;
+  $("#coachApp").hidden = false;
+  $("#start").focus();
+}
+$("#warmupStart").onclick = toggleWarmup;
+$("#warmupNext").onclick = advanceWarmup;
+$("#warmupSkip").onclick = leaveWarmup;
+$("#warmupContinue").onclick = leaveWarmup;
+$("#warmupRestart").onclick = () => { $("#warmupScreen").classList.remove("is-complete"); jumpToWarmup(0); };
+document.querySelectorAll(".warmup-step").forEach((step) => step.addEventListener("click", () => jumpToWarmup(Number(step.dataset.warmupStep))));
+document.addEventListener("keydown", (e) => {
+  const screen = $("#warmupScreen");
+  if (e.code !== "Space" || screen.hidden || screen.classList.contains("is-complete")) return;
+  if (e.target.closest("button, input, select, textarea, [contenteditable]")) return;
+  e.preventDefault(); toggleWarmup();
+});
+renderWarmup();
+
 // ---------- controls ----------
 const pressed = (group, btn) => group.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
 document.querySelectorAll(".ex-card").forEach((card) => card.addEventListener("click", () => {
@@ -439,4 +566,5 @@ if (params.get("video")) { setSource("file"); $("#fileName").textContent = param
 const TEST = params.has("test") || params.has("expected");
 $("#testWrap").hidden = !TEST; $("#resetTally").hidden = !TEST;
 if (params.get("expected")) $("#expected").value = params.get("expected");
+if (params.get("autostart") || params.has("test") || params.has("expected")) leaveWarmup();
 if (params.get("autostart")) start();

@@ -180,10 +180,284 @@
   .tally { font-weight: 600; margin-top: 10px; font-size: 14px; }
   .warn { background: var(--bad-soft); color: var(--bad-text); border-radius: 10px; padding: 8px 12px; margin-top: 10px; font-size: 14px; }
   footer { margin-top: 18px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  /* warm-up screen */
+  .warmup-screen {
+    --phase: #16a34a; --phase-soft: #e8f7ee; --phase-ink: #15803d;
+    min-height: 100vh; padding: 20px 24px 32px; color: var(--text);
+    background: radial-gradient(900px 420px at 100% -10%, var(--phase-soft), transparent 65%), var(--bg);
+  }
+  .warmup-inner { width: min(1160px, 100%); margin: 0 auto; }
+
+  .warmup-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .warmup-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+  .warmup-mark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--phase); color: #fff; }
+  .warmup-mark svg { width: 19px; height: 19px; }
+  .warmup-top-tools { display: flex; align-items: center; gap: 12px; }
+  .warmup-pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 13px; font-weight: 600; }
+  .warmup-pill svg { width: 14px; height: 14px; }
+  .warmup-skip { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--panel); color: var(--muted); cursor: pointer; font-size: 13.5px; font-weight: 600; transition: background .2s, color .2s; }
+  .warmup-skip:hover { background: var(--panel-2); color: var(--text); }
+  .warmup-skip svg { width: 14px; height: 14px; }
+
+  .warmup-hero { margin: 0 0 16px; }
+  .warmup-kicker { color: var(--phase-ink); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; transition: color .4s; }
+  .warmup-hero h1 { margin: 4px 0 0; font-size: clamp(28px, 3.4vw, 40px); font-weight: 800; line-height: 1.1; letter-spacing: -.03em; }
+
+  .warmup-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; margin-top: 24px; }
+  .warmup-main { display: flex; flex-direction: column; min-width: 0; }
+  .warmup-card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: 0 1px 2px rgba(17,24,39,.04), 0 12px 32px rgba(17,24,39,.05); }
+
+  /* stage */
+  .warmup-stage-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .warmup-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: var(--phase-soft); color: var(--phase-ink); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; transition: background .4s, color .4s; }
+  .warmup-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--phase); }
+  .warmup-count { color: var(--muted); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .warmup-count b { color: var(--text); }
+  .warmup-segments { display: flex; gap: 4px; height: 8px; margin-bottom: 28px; }
+  .warmup-seg { --c: var(--phase); flex: 1 1 0; min-width: 6px; border-radius: 99px; background: #eceef2; overflow: hidden; }
+  .warmup-seg i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--c); transition: width 1s linear; }
+
+  .warmup-stage-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr); gap: 32px; align-items: stretch; }
+  .warmup-info { display: flex; flex-direction: column; min-width: 0; }
+  .warmup-info h2 { margin: 0 0 8px; font-size: clamp(28px, 3vw, 36px); font-weight: 800; line-height: 1.1; letter-spacing: -.03em; }
+  .warmup-info p { max-width: 40ch; margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.55; }
+
+  .warmup-ring { position: relative; width: 168px; height: 168px; margin: 28px 0 24px; }
+  .warmup-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .warmup-ring circle { fill: none; stroke-width: 10; }
+  .warmup-ring .track { stroke: #eef0f3; }
+  .warmup-ring .fill { stroke: var(--phase); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .4s; }
+  .warmup-ring-text { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+  .warmup-time { font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .warmup-time-label { margin-top: 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .warmup-screen.is-ending .warmup-ring { animation: warmup-pulse 1s ease-in-out infinite; }
+  @keyframes warmup-pulse { 50% { transform: scale(1.04); } }
+
+  .warmup-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .warmup-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 13px 20px; cursor: pointer; font-size: 15px; font-weight: 700; transition: transform .15s, background .2s, box-shadow .2s; }
+  .warmup-btn svg { width: 16px; height: 16px; }
+  .warmup-btn:active { transform: scale(.97); }
+  .warmup-btn.primary { background: var(--phase); color: #fff; }
+  .warmup-btn.primary:hover { filter: brightness(.95); }
+  .warmup-btn.ghost { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); padding: 12px 16px; }
+  .warmup-btn.ghost:hover { background: #f1f2f5; }
+  .warmup-btn:focus-visible, .warmup-step:focus-visible, .warmup-skip:focus-visible { outline: 3px solid color-mix(in srgb, var(--phase) 35%, transparent); outline-offset: 2px; }
+  .warmup-hint { margin-top: 10px; color: var(--faint); font-size: 12px; }
+  .warmup-hint kbd { padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--panel); font: 600 11px var(--font); color: var(--muted); }
+
+  .warmup-upnext { display: flex; align-items: center; gap: 12px; margin-top: auto; padding-top: 20px; }
+  .warmup-upnext-thumb { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--line); overflow: hidden; }
+  .warmup-upnext-thumb img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; padding: 3px; }
+  .warmup-upnext-thumb svg { width: 20px; height: 20px; color: var(--muted); }
+  .warmup-upnext-label { display: block; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .warmup-upnext-name { display: block; font-size: 14px; font-weight: 600; }
+  .warmup-upnext-time { margin-left: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  .warmup-demo { position: relative; display: grid; place-items: center; min-height: 400px; padding: 24px; border-radius: 18px; background: var(--phase-soft); overflow: hidden; transition: background .4s; }
+  .warmup-demo::before { content: ""; position: absolute; width: 78%; aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.65); }
+  .warmup-demo::after { content: ""; position: absolute; bottom: 9%; width: 46%; height: 14px; border-radius: 50%; background: rgba(17,24,39,.07); filter: blur(2px); }
+  .warmup-demo img { position: relative; z-index: 1; display: block; max-width: 92%; max-height: 380px; width: auto; height: auto; object-fit: contain; mix-blend-mode: multiply; }
+  .warmup-demo-rest { position: relative; z-index: 1; display: grid; place-items: center; gap: 12px; color: var(--phase-ink); font-weight: 700; }
+  .warmup-demo-rest span { width: 120px; height: 120px; border-radius: 50%; background: var(--phase); opacity: .85; animation: warmup-breathe 8s ease-in-out infinite; }
+  @keyframes warmup-breathe { 0%, 100% { transform: scale(.7); } 50% { transform: scale(1.1); } }
+  .warmup-demo:has(.warmup-demo-rest:not([hidden]))::after { display: none; }
+  .warmup-demo-rest[hidden], .warmup-demo img[hidden] { display: none; }
+  .warmup-swap { animation: warmup-in .35s ease-out; }
+  @keyframes warmup-in { from { opacity: 0; transform: translateY(6px); } }
+
+  /* sequence */
+  .warmup-routine-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+  .warmup-routine h2 { margin: 0; font-size: 17px; font-weight: 700; }
+  .warmup-routine-meta { color: var(--muted); font-size: 12.5px; }
+  .warmup-group + .warmup-group { margin-top: 10px; }
+  .warmup-group-title { display: flex; align-items: center; gap: 7px; margin: 0 0 4px 10px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .warmup-group-title i { width: 7px; height: 7px; border-radius: 50%; }
+  .warmup-step { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; padding: 6px 10px; border: 0; border-radius: 12px; background: transparent; text-align: left; cursor: pointer; transition: background .2s; }
+  .warmup-step:hover { background: var(--panel-2); }
+  .warmup-step-number { position: relative; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 700; transition: all .25s; }
+  .warmup-step-number svg { display: none; width: 15px; height: 15px; }
+  .warmup-step-name { display: block; font-size: 14px; font-weight: 600; line-height: 1.3; }
+  .warmup-step-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+  .warmup-step-time { color: var(--faint); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .warmup-step[data-state="current"] { background: var(--phase-soft); }
+  .warmup-step[data-state="current"] .warmup-step-number { background: var(--phase); border-color: var(--phase); color: #fff; }
+  .warmup-step[data-state="current"] .warmup-step-name { color: var(--phase-ink); }
+  .warmup-step[data-state="done"] .warmup-step-number { background: var(--phase-soft); border-color: var(--phase-soft); color: var(--phase-ink); }
+  .warmup-step[data-state="done"] .warmup-step-number b { display: none; }
+  .warmup-step[data-state="done"] .warmup-step-number svg { display: block; }
+  .warmup-step[data-state="done"] .warmup-step-name { color: var(--muted); }
+  .warmup-note { display: flex; gap: 10px; margin-top: 18px; padding: 12px; border-radius: 12px; background: var(--bad-soft); color: var(--bad-text); font-size: 12px; line-height: 1.45; }
+  .warmup-note svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+
+  /* complete */
+  .warmup-complete { display: none; position: relative; overflow: hidden; max-width: 620px; margin: 56px auto 0; padding: 56px 32px; text-align: center; }
+  .warmup-screen.is-complete .warmup-complete { display: block; }
+  .warmup-screen.is-complete .warmup-active, .warmup-screen.is-complete .warmup-hero { display: none; }
+  .warmup-badge { width: 76px; height: 76px; margin: 0 auto 20px; display: grid; place-items: center; border-radius: 50%; background: var(--good-soft); color: var(--good); animation: warmup-pop .5s cubic-bezier(.3,1.6,.5,1); }
+  .warmup-badge svg { width: 36px; height: 36px; }
+  @keyframes warmup-pop { from { transform: scale(.3); opacity: 0; } }
+  .warmup-complete h2 { margin: 0 0 8px; font-size: 28px; font-weight: 800; letter-spacing: -.02em; }
+  .warmup-complete p { max-width: 420px; margin: 0 auto; color: var(--muted); }
+  .warmup-complete .warmup-actions { justify-content: center; margin-top: 28px; }
+  .warmup-complete .warmup-btn.primary { background: var(--phase); }
+  .warmup-confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; opacity: 0; animation: warmup-fall 2.4s ease-in forwards; }
+  @keyframes warmup-fall { 0% { opacity: 1; transform: translateY(0) rotate(0); } 100% { opacity: 0; transform: translateY(420px) rotate(540deg); } }
+
+  /* desktop: everything fits in one screen, no page scroll */
+  @media (min-width: 901px) {
+    .warmup-screen { height: 100vh; height: 100dvh; min-height: 0; padding: 16px 24px 20px; display: flex; flex-direction: column; overflow: hidden; }
+    .warmup-inner { flex: 1; min-height: 0; max-height: 940px; margin: auto; display: flex; flex-direction: column; }
+    .warmup-info { justify-content: center; }
+    .warmup-upnext { margin-top: 28px; }
+    .warmup-layout { flex: 1; min-height: 0; margin-top: 16px; align-items: stretch; }
+    .warmup-main, .warmup-stage { min-height: 0; }
+    .warmup-stage { flex: 1; display: flex; flex-direction: column; }
+    .warmup-stage-body { flex: 1; min-height: 0; }
+    .warmup-segments { margin-bottom: clamp(16px, 3vh, 28px); }
+    .warmup-ring { width: clamp(112px, 21vh, 168px); height: clamp(112px, 21vh, 168px); margin: clamp(14px, 3vh, 28px) 0 clamp(14px, 2.6vh, 24px); }
+    .warmup-time { font-size: clamp(30px, 5.4vh, 44px); }
+    .warmup-demo { min-height: 0; container-type: size; }
+    .warmup-demo::before { width: min(80cqw, 80cqh); height: min(80cqw, 80cqh); }
+    .warmup-demo img { position: absolute; inset: 20px; width: calc(100% - 40px); height: calc(100% - 40px); max-width: none; max-height: none; }
+    .warmup-routine { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+    .warmup-note { margin-top: auto; }
+    .warmup-routine .warmup-group { display: flex; flex-direction: column; flex: var(--n, 1) 1 auto; min-height: 0; }
+    .warmup-routine .warmup-group + .warmup-group { margin-top: clamp(8px, 1.6vh, 18px); }
+    .warmup-routine .warmup-step { flex: 1 1 auto; max-height: 72px; }
+    .warmup-routine .warmup-note { margin-top: clamp(12px, 2vh, 20px); }
+    .warmup-routine .warmup-skip { margin-top: clamp(8px, 1.4vh, 12px); }
+    .warmup-complete { margin-top: auto; margin-bottom: auto; }
+  }
+  @media (min-width: 901px) and (max-height: 880px) {
+    .warmup-hint { display: none; }
+    .warmup-step-detail { display: none; }
+    .warmup-step { padding: 5px 10px; }
+    .warmup-step-number { width: 26px; height: 26px; }
+    .warmup-routine-head { margin-bottom: 10px; }
+    .warmup-card { padding: 20px; }
+    .warmup-hero h1 { font-size: 30px; }
+    .warmup-upnext { padding-top: 12px; }
+  }
+  @media (min-width: 901px) and (max-height: 740px) {
+    .warmup-info h2 { font-size: 26px; }
+    .warmup-info p { font-size: 14px; }
+    .warmup-note { padding: 8px 10px; font-size: 11px; line-height: 1.35; }
+    .warmup-upnext { margin-top: 12px; padding-top: 0; }
+    .warmup-step { padding: 3px 10px; }
+    .warmup-routine .warmup-note { margin-top: 10px; }
+    .warmup-layout { margin-top: 12px; }
+    .warmup-skip { margin-top: 8px; padding: 7px 12px; }
+    .warmup-group-title { margin-bottom: 2px; }
+    .warmup-group + .warmup-group { margin-top: 6px; }
+  }
+  @media (min-width: 901px) and (max-height: 640px) {
+    .warmup-routine { padding: 14px 16px; }
+    .warmup-step { padding: 2px 8px; }
+    .warmup-step-number { width: 22px; height: 22px; font-size: 11px; }
+    .warmup-routine-head { margin-bottom: 6px; }
+  }
+  @media (max-width: 900px) {
+    .warmup-layout { grid-template-columns: 1fr; }
+    .warmup-stage-body { grid-template-columns: 1fr; gap: 20px; }
+    .warmup-demo { order: -1; min-height: 260px; }
+    .warmup-demo img { max-height: 230px; }
+  }
+  @media (max-width: 560px) {
+    .warmup-screen { padding: 16px 16px 28px; }
+    .warmup-pill { display: none; }
+    .warmup-hero { margin: 24px 0 16px; }
+    .warmup-card { padding: 18px; border-radius: 18px; }
+    .warmup-ring { width: 136px; height: 136px; margin: 20px 0; }
+    .warmup-time { font-size: 36px; }
+    .warmup-hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .warmup-screen *, .warmup-screen *::before { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
-<main>
+<section class="warmup-screen" id="warmupScreen" data-phase="warm">
+  <div class="warmup-inner">
+    <div class="warmup-top">
+      <div class="warmup-brand"><span class="warmup-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20V8M12 8c-1.8-3.2-5.5-3.5-7-1 2.7.1 4.5 1.3 5.4 3.4M12 11c1.8-3.2 5.5-3.5 7-1-2.7.1-4.5 1.3-5.4 3.4"/></svg></span>Form Check</div>
+      <div class="warmup-top-tools">
+        <span class="warmup-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4"/></svg>5 min · no camera needed</span>
+      </div>
+    </div>
+    <div class="warmup-layout warmup-active">
+      <div class="warmup-main">
+      <div class="warmup-hero">
+        <div class="warmup-kicker">Before your session</div>
+        <h1>Let’s get you moving</h1>
+      </div>
+      <section class="warmup-card warmup-stage" aria-live="polite">
+        <div class="warmup-stage-head">
+          <span class="warmup-chip"><i></i><span id="warmupPhaseName">Get warm</span></span>
+          <span class="warmup-count">Move <b id="warmupPhase">1</b> of 9 · <span id="warmupElapsed">0:00 / 5:00</span></span>
+        </div>
+        <div class="warmup-segments" id="warmupSegments" aria-hidden="true"></div>
+        <div class="warmup-stage-body">
+          <div class="warmup-info">
+            <div id="warmupText">
+              <h2 id="warmupTitle">March in place</h2>
+              <p id="warmupInstruction">Easy pace, small knee lifts, relaxed arms.</p>
+            </div>
+            <div class="warmup-ring" role="timer">
+              <svg viewBox="0 0 160 160"><circle class="track" cx="80" cy="80" r="70"/><circle class="fill" id="warmupRing" cx="80" cy="80" r="70"/></svg>
+              <div class="warmup-ring-text"><span class="warmup-time" id="warmupTime">1:00</span><span class="warmup-time-label" id="warmupTimeLabel">Ready</span></div>
+            </div>
+            <div class="warmup-actions">
+              <button class="warmup-btn primary" id="warmupStart">Start warm-up</button>
+              <button class="warmup-btn ghost" id="warmupNext" hidden>Skip move<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l7 6-7 6M17 6v12"/></svg></button>
+            </div>
+            <div class="warmup-hint">Tip: press <kbd>Space</kbd> to start or pause</div>
+            <div class="warmup-upnext">
+              <span class="warmup-upnext-thumb" id="warmupNextThumb"></span>
+              <span><span class="warmup-upnext-label">Up next</span><span class="warmup-upnext-name" id="warmupNextName">Shoulder rolls</span></span>
+              <span class="warmup-upnext-time" id="warmupNextTime">0:30</span>
+            </div>
+          </div>
+          <div class="warmup-demo">
+            <img id="warmupGif" src="assets/warmups/cropped/march-in-place.gif" alt="Animated illustration of march in place">
+            <div class="warmup-demo-rest" id="warmupRest" hidden><span></span><div id="warmupBreath">Breathe in…</div></div>
+          </div>
+        </div>
+      </section>
+      </div>
+      <aside class="warmup-card warmup-routine">
+        <div class="warmup-routine-head"><h2>Today’s sequence</h2><span class="warmup-routine-meta">9 moves · 5 min</span></div>
+        <div class="warmup-group" style="--n:1"><div class="warmup-group-title"><i style="background:var(--phase)"></i>Get warm · 1:00</div>
+          <button class="warmup-step" data-warmup-step="0" data-state="current"><span class="warmup-step-number"><b>1</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">March in place</span><span class="warmup-step-detail">Easy pace, small knee lifts</span></span><span class="warmup-step-time">1:00</span></button>
+        </div>
+        <div class="warmup-group" style="--n:6"><div class="warmup-group-title"><i style="background:var(--phase)"></i>Mobilize · 3:10</div>
+          <button class="warmup-step" data-warmup-step="1" data-state="todo"><span class="warmup-step-number"><b>2</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Shoulder rolls</span><span class="warmup-step-detail">15 seconds forward, 15 back</span></span><span class="warmup-step-time">0:30</span></button>
+          <button class="warmup-step" data-warmup-step="2" data-state="todo"><span class="warmup-step-number"><b>3</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Arm circles</span><span class="warmup-step-detail">Switch direction halfway</span></span><span class="warmup-step-time">0:30</span></button>
+          <button class="warmup-step" data-warmup-step="3" data-state="todo"><span class="warmup-step-number"><b>4</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Standing side bend</span><span class="warmup-step-detail">Slow and gentle, alternating sides</span></span><span class="warmup-step-time">0:30</span></button>
+          <button class="warmup-step" data-warmup-step="4" data-state="todo"><span class="warmup-step-number"><b>5</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Hip circles</span><span class="warmup-step-detail">Hands on hips, switch direction</span></span><span class="warmup-step-time">0:30</span></button>
+          <button class="warmup-step" data-warmup-step="5" data-state="todo"><span class="warmup-step-number"><b>6</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Knee circles</span><span class="warmup-step-detail">Small circles, knees bent</span></span><span class="warmup-step-time">0:30</span></button>
+          <button class="warmup-step" data-warmup-step="6" data-state="todo"><span class="warmup-step-number"><b>7</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Ankle circles</span><span class="warmup-step-detail">20 seconds per side</span></span><span class="warmup-step-time">0:40</span></button>
+        </div>
+        <div class="warmup-group" style="--n:2"><div class="warmup-group-title"><i style="background:var(--phase)"></i>Reset · 0:50</div>
+          <button class="warmup-step" data-warmup-step="7" data-state="todo"><span class="warmup-step-number"><b>8</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Calf raises</span><span class="warmup-step-detail">Slow up, slow down</span></span><span class="warmup-step-time">0:30</span></button>
+          <button class="warmup-step" data-warmup-step="8" data-state="todo"><span class="warmup-step-number"><b>9</b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span><span class="warmup-step-name">Breathe and reset</span><span class="warmup-step-detail">A few deep breaths, then start your HEP</span></span><span class="warmup-step-time">0:20</span></button>
+        </div>
+        <div class="warmup-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg><span>Stop if you feel sharp pain, dizziness, or unusual shortness of breath. Use the version your physical therapist approved for you.</span></div>
+        <button class="warmup-skip" id="warmupSkip">Skip warm-up<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+      </aside>
+    </div>
+    <div class="warmup-card warmup-complete">
+      <div class="warmup-confetti" id="warmupConfetti" aria-hidden="true"></div>
+      <div class="warmup-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <div class="warmup-kicker" style="color:var(--good-text)">Warm-up complete</div>
+      <h2>Nice work! You’re warmed up.</h2>
+      <p>Your body is ready for the posture check. Pick an exercise on the next screen and start when you feel comfortable.</p>
+      <div class="warmup-actions"><button class="warmup-btn primary" id="warmupContinue">Go to posture check<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button><button class="warmup-btn ghost" id="warmupRestart">Do it again</button></div>
+    </div>
+  </div>
+</section>
+<main id="coachApp" hidden>
   <header>
     <div class="brand">
       <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.2"/><path d="M12 8v6M12 14l-3 6M12 14l3 6M7 10l5-1 5 1"/></svg></div>
