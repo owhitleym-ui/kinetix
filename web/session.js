@@ -49,6 +49,45 @@ export const RULES = {
   },
 };
 
+// Mobility setting: how much to relax what counts as a good rep, for people whose mobility keeps them from the
+// full textbook movement. Measured with tests/mobility_test.mjs on held-out people.
+//  slight:   ~15% less range needed to count; range-of-motion mistakes need ~1.7x the evidence, typical
+//            compensations ~1.25x, everything else slightly more
+//  moderate: ~25% less range; range-of-motion mistakes ~3x the evidence, compensations ~1.7x
+// Range-of-motion / compensation feedback uses gentle wording in both.
+const GENTLE_CUES = {
+  ERR_SHALLOW_SQUAT: "If it's comfortable, try to go a little lower. Only as far as feels okay.",
+  ERR_LOW_ABDUCTION: "If it's comfortable, try to lift your arm a little higher. Only as far as feels okay.",
+  ERR_LIFTED_HEELS: "Try to keep your heels down. A slightly smaller squat is fine.",
+  ERR_ELEVATED_SHOULDER: "Try to keep your shoulder relaxed. It's fine to lift a little lower.",
+  ERR_TORSO_FORWARD: "Try to stay upright. It's fine to move your arm back a little less.",
+};
+const relaxed = (rom, comp) => ({
+  ERR_SHALLOW_SQUAT: rom, ERR_LOW_ABDUCTION: rom,                                        // range of motion
+  ERR_LIFTED_HEELS: comp, ERR_ELEVATED_SHOULDER: comp, ERR_TORSO_FORWARD: comp,          // typical compensations
+});
+export const MOBILITY = {
+  standard: { label: "None", tauScale: 1, downweight: {}, ampScale: 1, extraSec: 0, restSlack: 0, cues: {} },
+  slight: { label: "Slight", tauScale: 0.88, downweight: relaxed(0.6, 0.8), ampScale: 0.85, extraSec: 2, restSlack: 5, cues: GENTLE_CUES },
+  moderate: { label: "Moderate", tauScale: 0.75, downweight: relaxed(0.35, 0.6), ampScale: 0.75, extraSec: 4, restSlack: 10, cues: GENTLE_CUES },
+};
+MOBILITY.limited = MOBILITY.moderate;   // older names
+MOBILITY.small = MOBILITY.slight;
+
+// Rules for an exercise at a mobility level.
+export function rulesFor(ex, mobility = "standard") {
+  const r = RULES[ex], m = MOBILITY[mobility] ?? MOBILITY.standard;
+  if (m === MOBILITY.standard) return r;
+  return {
+    ...r,
+    minAmp: r.minAmp === undefined ? undefined : r.minAmp * m.ampScale,
+    maxSec: r.maxSec + m.extraSec,
+    restPose: ex === "squat" ? (P) => knees(P) > 150 - m.restSlack : (P) => rightShoulder(P) < 35 + m.restSlack,
+    shallowHint: ex === "squat" ? "Not counted yet: lower a little more if it's comfortable"
+      : "Not counted yet: raise your arm a little higher if it's comfortable",
+  };
+}
+
 const range = (a) => Math.max(...a) - Math.min(...a);
 
 // Before counting: whole body in frame, facing the camera, in the start position, holding still for holdMs.

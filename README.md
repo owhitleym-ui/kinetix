@@ -16,6 +16,10 @@ after every rep. Everything runs in the browser tab: the video never leaves your
 - **Only real reps count**: a movement must be complete and deliberate (full range, back to start, steady, in frame).
   Anything else is logged as "Not counted" with the reason.
 - **Feedback on every rep**: verdict, how to fix it, spoken cue, joint-angle overlay, rep counter and a rep log.
+- **Mobility limits: None / Slight / Moderate**: relaxes what counts as a good rep for people who can't do the full
+  movement. Slight: about 15% less range needed to count; Moderate: about 25% less. Range-of-motion feedback gets
+  gentler and needs more evidence; real form problems are still flagged. Good reps called good: 70-75% (None),
+  75-77% (Slight), 79-81% (Moderate); mistakes still flagged: 93-94%, 93%, 91-92%. Remembered per browser.
 - **Full screen** with large overlays (button on the video, or press `F`).
 
 ## Quick start
@@ -55,33 +59,48 @@ web/                    the app (static files, served as-is)
   index.html            layout and styles
   app.js                camera loop, drawing, feedback, voice, rep log, full screen
   features.js           joint-angle features, rep detection, calibration, classifier (shared with the tests)
-  session.js            setup gate and rep validation rules
+  session.js            setup gate, rep validation rules, mobility setting
   models/               pose_landmarker_full.task (MediaPipe) + rehab26_<exercise>.json (trained weights)
 training/
   train_rehab26.py      train + evaluate (leave-one-person-out) + export models to web/models/
   rehab_features.py     Python copy of the feature code in web/features.js
+  export_features.py    rebuilds dataset/rehab26_features.npz from the full data
   report.json           metrics from the last training run
+dataset/
+  rehab26_features.npz  compact ready-to-train dataset (every labeled rep as model features + labels, 48 MB)
 tests/
   parity_test.mjs       browser features == training features
   sim_test.mjs          replays held-out people frame by frame through the live pipeline
+  mobility_test.mjs     None / Slight / Moderate mobility limits on the same replays
   tune.mjs, offsets.mjs rep-detection tuning tools
   browser_test.py, load_check.py, fs_check.py   headless-Chrome checks of the real page
-scripts/get_data.sh     downloads the training data into data/ (not committed)
+scripts/get_data.sh     downloads the full skeleton data into data/ (not committed, ~690 MB)
 ```
 
 ## Retrain the models
 
+Works right after cloning, using the compact dataset in `dataset/` (no download, about 10 seconds):
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+python training/train_rehab26.py       # writes web/models/*.json and training/report.json
+```
+
+To change the features themselves or run the replay tests, get the full skeleton data first. Training then uses it
+automatically and also writes `tests/data/`:
+
+```bash
 bash scripts/get_data.sh               # about 690 MB into data/rehab26
-python training/train_rehab26.py       # writes web/models/*.json and tests/data/
+python training/train_rehab26.py
+python training/export_features.py     # optional: refresh dataset/rehab26_features.npz
 ```
 
 ## Tests
 
 ```bash
-npm test                               # needs tests/data/ from a training run
+npm test                               # needs tests/data/ from a training run on the full data
+npm run mobility                       # None vs Slight vs Moderate mobility limits
 npm run serve &                        # then, with Google Chrome installed:
 python tests/load_check.py             # page loads without errors
 python tests/browser_test.py testvideos/<clip>.mp4 arm_abduction CORRECT   # clip in web/testvideos/
@@ -123,6 +142,8 @@ because their training data is licensed CC BY-NC 4.0 (details below).
   Orientation in Single- and Multi-View Camera Environments for AI-based Rehabilitation Monitoring*,
   [arXiv:2609.35726](https://doi.org/10.48550/arXiv.2609.35726); dataset
   [doi:10.5281/zenodo.23018127](https://doi.org/10.5281/zenodo.23018127). Licensed **CC BY-NC 4.0**, so the
-  trained models in `web/models/rehab26_*.json` are for non-commercial use.
+  trained models in `web/models/rehab26_*.json` and the derived dataset in `dataset/` are for non-commercial use.
+  `dataset/rehab26_features.npz` is a modified version of that data (features computed from its skeletons), shared
+  under the same license with attribution. The raw data is not included; `scripts/get_data.sh` downloads it.
 - **MediaPipe Pose Landmarker** (Google, Apache 2.0): `web/models/pose_landmarker_full.task` and the
   `@mediapipe/tasks-vision` library loaded from jsDelivr.

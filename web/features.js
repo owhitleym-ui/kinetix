@@ -123,10 +123,18 @@ export function classify(model, frames, center = null, x = repFeatures(frames, m
 }
 
 // Sensitive decision: name the most likely mistake whenever P(correct) < model.tau.
-export function decide(model, out) {
-  if ((out.probs.CORRECT ?? 0) >= model.tau) return { ...out, label: "CORRECT", prob: out.probs.CORRECT };
-  const [label, prob] = Object.entries(out.probs).filter(([c]) => c !== "CORRECT").sort((a, b) => b[1] - a[1])[0];
-  return { ...out, label, prob };
+// opts (mobility setting): tauScale lowers the bar for "good form"; downweight[mistake] < 1 means that mistake
+// needs proportionally more evidence (its probability is scaled down, then all are renormalized).
+export function decide(model, out, { tauScale = 1, downweight = {} } = {}) {
+  let probs = out.probs;
+  if (Object.keys(downweight).length) {
+    probs = Object.fromEntries(Object.entries(probs).map(([c, p]) => [c, p * (downweight[c] ?? 1)]));
+    const s = Object.values(probs).reduce((a, b) => a + b, 0);
+    for (const c in probs) probs[c] /= s;
+  }
+  if ((probs.CORRECT ?? 0) >= model.tau * tauScale) return { ...out, probs, label: "CORRECT", prob: probs.CORRECT };
+  const [label, prob] = Object.entries(probs).filter(([c]) => c !== "CORRECT").sort((a, b) => b[1] - a[1])[0];
+  return { ...out, probs, label, prob };
 }
 
 // Live rep detection on one "primary" signal: a rep starts when it moves away from the resting value

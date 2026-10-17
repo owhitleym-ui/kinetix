@@ -37,6 +37,6 @@ try:
         send("Page.captureScreenshot", {"format": "png"}); want = n[0]
         while True:
             m = json.loads(ws.recv())
-            if m.get("id") == want: open(os.environ["SHOT"], "wb").write(base64.b64decode(m["result"]["data"])); print("shot", os.environ["SHOT"]); break
+            if m.get("id") == want: os.makedirs(os.path.dirname(os.path.abspath(os.environ["SHOT"])), exist_ok=True); open(os.environ["SHOT"], "wb").write(base64.b64decode(m["result"]["data"])); print("shot", os.environ["SHOT"]); break
 finally:
     p.terminate(); p.wait(timeout=10); shutil.rmtree(prof, ignore_errors=True)

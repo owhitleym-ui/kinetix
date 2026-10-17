@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "oracle-oci-api-mcp-server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["oracle.oci-api-mcp-server"],
+      "env": {
+        "OCI_CONFIG_PROFILE": "DEFAULT",
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    }
+  }
+}

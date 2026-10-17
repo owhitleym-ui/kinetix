@@ -3,7 +3,10 @@
 // per-rep error classifier -> verdict + spoken cue.
 import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
 import { Calibrator, classify, decide, makeSegmenter, repFeatures } from "./features.js";
-import { RULES, SetupGate, framing, validateRep } from "./session.js";
+import { MOBILITY, SetupGate, framing, rulesFor, validateRep } from "./session.js";
+import * as sessionMemory from "./sessionMemory.js";
+import { fetchChat, fetchCue, fetchSummary } from "./coach.js";
+import { ensureMicPermission, listen as listenSpeech, supported as speechSupported } from "./speechInput.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "models/pose_landmarker_full.task";
@@ -13,6 +16,11 @@ const HOWTO = {
   arm_abduction: "<b>Shoulder Abduction.</b> Stand facing the camera with your <b>whole body, head to feet</b>, in the frame and your right arm by your side. Hold still until it says <b>Go</b>, then raise your <b>right</b> arm out to the side and bring it all the way back down for each rep.",
   shoulder_extension: "<b>Shoulder Extension.</b> Stand facing the camera with your <b>whole body, head to feet</b>, in the frame and your right arm by your side. After <b>Go</b>, each time you hear <b>“Back”</b>, move your <b>right</b> arm straight back behind you and return before the next cue.",
 };
+const MOBILITY_NOTES = {
+  slight: "<b>Slight mobility limits.</b> A slightly smaller range of motion counts, and small range issues are flagged less. Move only as far as is comfortable.",
+  moderate: "<b>Moderate mobility limits.</b> A smaller range of motion counts, and only clear form problems are flagged. Move only as far as is comfortable.",
+};
+const mobilityNote = () => (MOBILITY_NOTES[mobility] ? `<br><br>${MOBILITY_NOTES[mobility]}` : "");
 const CALIBRATE = "You get feedback on every rep. After your first few reps it also adapts to your body, which makes it more precise.";
 
 // Body-only skeleton (no face points).
@@ -20,6 +28,27 @@ const JOINT = { ls: 11, rs: 12, le: 13, re: 14, lw: 15, rw: 16, lh: 23, rh: 24, 
 const BONES = [["ls", "rs"], ["ls", "le"], ["le", "lw"], ["rs", "re"], ["re", "rw"], ["neck", "pelvis"], ["pelvis", "lh"],
   ["pelvis", "rh"], ["lh", "lk"], ["lk", "la"], ["rh", "rk"], ["rk", "ra"], ["la", "lt"], ["ra", "rt"]];
 const DOTS = ["ls", "rs", "le", "re", "lw", "rw", "neck", "pelvis", "lh", "rh", "lk", "rk", "la", "ra"];
+// Which joints light up red for each mistake (same idea as main's SkeletonOverlay).
+const HIGHLIGHT = {
+  ERR_KNEES_INSIDE: ["lk", "rk", "la", "ra"],
+  ERR_TORSO_TO_SIDE: ["ls", "rs", "lh", "rh", "neck", "pelvis"],
+  ERR_SHALLOW_SQUAT: ["lh", "rh", "lk", "rk"],
+  ERR_KNEES_FORWARD: ["lk", "rk", "la", "ra"],
+  ERR_LIFTED_HEELS: ["la", "ra", "lt", "rt"],
+  ERR_ARM_FORWARD: ["rs", "re", "rw"],
+  ERR_ELEVATED_SHOULDER: ["rs", "ls", "neck"],
+  ERR_HEAD_TO_SIDE: ["ls", "rs", "neck"],
+  ERR_LOW_ABDUCTION: ["rs", "re", "rw"],
+  ERR_BENT_ARM: ["rs", "re", "rw"],
+  ERR_TORSO_FORWARD: ["ls", "rs", "lh", "rh", "neck", "pelvis"],
+  ERR_TORSO_ROTATION: ["ls", "rs", "lh", "rh", "neck", "pelvis"],
+  ERR_ARM_TO_SIDE: ["rs", "re", "rw"],
+};
+const BONE_OK = "rgba(255,255,255,0.95)";
+const BONE_BAD = "#ef4444";
+const DOT_OK = "#ffffff";
+const DOT_BAD = "#ef4444";
+const HIGHLIGHT_MS = 3200;
 // Joint angles drawn on the video: [label, a, b (vertex), c] as MediaPipe indices.
 const ANGLES = {
   squat: [["L knee", 23, 25, 27], ["R knee", 24, 26, 28]],
@@ -44,12 +73,32 @@ const nice = (code) => LABELS[code] || code.replace(/^ERR_/, "").toLowerCase().r
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 let currentEx = EXERCISES[0], source = "webcam", setSizeVal = 10;
+let mobility = "standard";
+try { if (MOBILITY[localStorage.getItem("formcheck.mobility")]) mobility = localStorage.getItem("formcheck.mobility"); } catch (e) { /* storage blocked */ }
+const rules = () => rulesFor(currentEx, mobility);
+const cueFor = (label) => MOBILITY[mobility].cues[label] || model.cues[label];
 const setSize = () => setSizeVal;
 
 let landmarker, model, seg, cal, gate, stream, running = false, lastTime = -1;
 let phase = "setup", outFrames = 0, repCount = 0, calAmps = [], chipTimer;
 let facingHist = [], fpsT = [], tally = { n: 0, exact: 0, binary: 0 };
 let smoothImg = null, shownAngle = {}, smoothAngle = {};
+let highlightKeys = new Set(), highlightUntil = 0;
+
+function setHighlight(label) {
+  const keys = HIGHLIGHT[label];
+  if (!keys?.length) { highlightKeys = new Set(); highlightUntil = 0; return; }
+  highlightKeys = new Set(keys);
+  highlightUntil = performance.now() + HIGHLIGHT_MS;
+}
+function clearHighlight() { highlightKeys = new Set(); highlightUntil = 0; }
+function activeHighlight() {
+  if (!highlightKeys.size || performance.now() > highlightUntil) {
+    if (highlightKeys.size) clearHighlight();
+    return null;
+  }
+  return highlightKeys;
+}
 
 // ---------- MediaPipe + model ----------
 async function loadLandmarker() {
@@ -66,8 +115,8 @@ async function loadModel(ex) {
   model = await (await fetch(`models/rehab26_${ex}.json`)).json();
   seg = makeSegmenter(model.segmenter);
   cal = new Calibrator(model.calibration);
-  gate = new SetupGate(RULES[ex]);
-  $("#howto").innerHTML = `${HOWTO[ex]}<br><br>${CALIBRATE}`;
+  gate = new SetupGate(rulesFor(ex, mobility));
+  $("#howto").innerHTML = `${HOWTO[ex]}<br><br>${CALIBRATE}${mobilityNote()}`;
   $("#expected").innerHTML = `<option value="">Not testing</option>` +
     model.classes.map((c) => `<option value="${c}">${esc(nice(c))}</option>`).join("");
   const m = model.metrics;
@@ -183,10 +232,11 @@ function onPose(res, t) {
 
 // A detected movement: count and assess it only if it is a complete, deliberate rep.
 function onMovement(frames) {
-  const v = validateRep(frames, seg, RULES[model.exercise]);
+  const v = validateRep(frames, seg, rules());
   if (!v.ok) {
     showChip(`Not counted · ${v.short}`, "muted", 3500);
     logRow("skip", "–", "Not counted", v.short, "");
+    sessionMemory.pushSkip({ reason: v.reason, short: v.short });
     speak(`Not counted. ${v.reason}`);
     return;
   }
@@ -196,11 +246,13 @@ function onMovement(frames) {
   // Feedback on every rep: the early model (change from the rep's own start) until we know this user's normal,
   // then the calibrated model (compared with the user's own previous reps). Both run automatically.
   const x = repFeatures(frames, model.feature_set);
-  const out = cal.ready ? decide(model, classify(model, frames, cal.center(), x)) : decide(model.early, classify(model.early, frames));
+  const opts = MOBILITY[mobility];
+  const out = cal.ready ? decide(model, classify(model, frames, cal.center(), x), opts) : decide(model.early, classify(model.early, frames), opts);
   learn(x, v.amp);
   const good = out.label === "CORRECT", done = repCount === setSize();
   showCount(done ? "set complete ✓" : "");
   showChip(good ? `✓ Good form${done ? " · set complete" : ""}` : `${model.short[out.label]}${done ? " · set complete" : ""}`, good ? "good" : "bad");
+  if (good) clearHighlight(); else setHighlight(out.label);
 
   const expected = $("#expected").value;
   let tag = "";
@@ -211,17 +263,53 @@ function onMovement(frames) {
     $("#tally").textContent = `Test tally: exact ${tally.exact}/${tally.n} (${Math.round(100 * tally.exact / tally.n)}%), ` +
       `correct-vs-wrong ${tally.binary}/${tally.n} (${Math.round(100 * tally.binary / tally.n)}%)`;
   }
+  const topProbs = Object.entries(out.probs).sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([c, p]) => ({ label: c, title: nice(c), p: Math.round(p * 100) / 100 }));
   const bars = Object.entries(out.probs).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
     `<div class="bar${i === 0 ? " top" : ""}"><span>${esc(nice(c))}</span><span><i style="width:${(p * 100).toFixed(0)}%"></i></span><span>${(p * 100).toFixed(0)}%</span></div>`).join("");
   const secs = ((frames[frames.length - 1].t - frames[0].t) / 1000).toFixed(1);
+  const fixCue = good ? "Nice work. Keep it up." : (cueFor(out.label) || "");
   $("#latest").innerHTML = `<div class="rep-meta">Rep ${repCount} · ${secs} s</div>
     <div class="verdict" style="color:var(${good ? "--good-text" : "--bad-text"})">${esc(nice(out.label))}</div>
-    <div class="cue">${good ? "Nice work. Keep it up." : esc(model.cues[out.label])}</div>${tag}
+    <div class="cue">${esc(fixCue)}</div>${tag}
     <div class="rep-meta" style="margin:14px 0 8px">What the model saw</div><div class="bars">${bars}</div>`;
   logRow(good ? "good" : "bad", repCount, nice(out.label), good ? "" : model.short[out.label], tag || `${secs} s`);
-  // spoken feedback every rep: the count + "good", or the mistake with how to fix it
-  const how = model.segmenter.mode === "tempo" ? "" : ` ${model.cues[out.label]}`;   // tempo: keep it short before the next cue
-  speak(good ? `${repCount}. Good.${done ? " Set complete." : ""}` : `${repCount}. ${model.short[out.label]}.${how}${done ? " Set complete." : ""}`);
+
+  sessionMemory.pushRep({
+    rep: repCount,
+    label: out.label,
+    title: nice(out.label),
+    short: good ? "Good form" : (model.short[out.label] || ""),
+    cue: fixCue,
+    good,
+    duration_s: Number(secs),
+    top_probs: topProbs,
+  });
+
+  // Spoken cue: GenAI paraphrase (≤10 words) with local fallback; UI stays on classifier copy.
+  const cuePayload = {
+    exercise: model.exercise,
+    rep: repCount,
+    label: out.label,
+    short: good ? "Good form" : (model.short[out.label] || ""),
+    cue: fixCue,
+    good,
+    probs: Object.fromEntries(topProbs.map((t) => [t.label, t.p])),
+    reps_done: repCount,
+    reps_target: setSize(),
+  };
+  const localSpoken = good
+    ? `${repCount}. Good.${done ? " Set complete." : ""}`
+    : `${repCount}. ${model.short[out.label]}.${done ? " Set complete." : ""}`;
+  speak(localSpoken);
+  const cueToken = ++cueRequestId;
+  fetchCue(cuePayload).then((r) => {
+    if (cueToken !== cueRequestId || !r.text || r.source === "local") return;
+    // Upgrade spoken line if GenAI returned a short cue (skip if set already done — summary speaks next).
+    if (!done) speak(`${repCount}. ${r.text}`);
+  });
+
+  if (done) showSetSummary();
 }
 
 // Rep log: one concise row per movement (newest first) + a running summary.
@@ -239,6 +327,169 @@ function resetLog() {
   logCounts = { good: 0, bad: 0, skip: 0 };
   $("#history").innerHTML = ""; $("#summary").innerHTML = ""; $("#logEmpty").hidden = false;
 }
+
+// ---------- GenAI coach UI ----------
+let cueRequestId = 0;
+let chatHistory = [];
+let micHandle = null;
+
+function resetCoachUi() {
+  chatHistory = [];
+  cueRequestId++;
+  const box = $("#coachMsgs");
+  if (box) {
+    box.innerHTML = `<div class="coach-msg system">Ask about your last rep, how many are left, or what to fix. Use the mic or type.</div>`;
+  }
+  const sum = $("#setSummary");
+  if (sum) sum.hidden = true;
+  $("#setSummaryBody").textContent = "";
+  $("#setSummaryTips").innerHTML = "";
+  if (micHandle) { micHandle.stop(); micHandle = null; }
+  $("#coachMic")?.classList.remove("listening");
+}
+
+function appendCoachMsg(role, text) {
+  const box = $("#coachMsgs");
+  if (!box) return;
+  const div = document.createElement("div");
+  div.className = `coach-msg ${role}`;
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function askCoach(raw) {
+  const message = (raw || "").trim();
+  if (!message) return;
+  $("#coachInput").value = "";
+  appendCoachMsg("user", message);
+  chatHistory.push({ role: "user", content: message });
+  $("#coachSend").disabled = true;
+  const { reply } = await fetchChat({
+    message,
+    history: chatHistory.slice(-8),
+    session_context: sessionMemory.context(),
+  });
+  $("#coachSend").disabled = false;
+  appendCoachMsg("assistant", reply);
+  chatHistory.push({ role: "assistant", content: reply });
+  speak(reply);
+}
+
+async function showSetSummary() {
+  const panel = $("#setSummary");
+  if (!panel) return;
+  panel.hidden = false;
+  $("#setSummaryBody").textContent = "Writing your summary…";
+  $("#setSummaryTips").innerHTML = "";
+  const result = await fetchSummary(sessionMemory.context());
+  $("#setSummaryBody").textContent = result.summary;
+  $("#setSummaryTips").innerHTML = (result.tips || []).map((t) => `<li>${esc(t)}</li>`).join("");
+  const first = (result.summary || "").split(/(?<=[.!?])\s+/)[0];
+  if (first) speak(first);
+}
+
+$("#coachForm")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  askCoach($("#coachInput").value);
+});
+
+function clearListeningHint() {
+  const box = $("#coachMsgs");
+  const last = box?.lastElementChild;
+  if (last?.classList.contains("system") && /Listening|Requesting mic|Starting mic/i.test(last.textContent || "")) {
+    last.remove();
+  }
+}
+
+function stopMic() {
+  if (micHandle) {
+    try { micHandle.stop(); } catch { /* ignore */ }
+    micHandle = null;
+  }
+  $("#coachMic")?.classList.remove("listening");
+  $("#coachMic")?.setAttribute("aria-pressed", "false");
+  clearListeningHint();
+}
+
+function micErrorMessage(err) {
+  if (err === "aborted") return null;
+  if (err === "no-speech") return "Didn't catch that — click the mic and speak clearly.";
+  if (err === "not-allowed" || err === "service-not-allowed" || err === "no-media-devices") {
+    return "Mic blocked — click the lock/tune icon in the address bar and allow Microphone for this site.";
+  }
+  if (err === "audio-capture") return "No microphone found. Check your input device in Windows settings.";
+  if (err === "network") {
+    return "Speech recognition needs internet (Chrome uses Google's speech service). Check your connection, or type instead.";
+  }
+  if (err === "unsupported") return "Speech recognition needs Chrome or Edge (not Firefox). Or type your question.";
+  return `Mic error: ${err}`;
+}
+
+$("#coachMic")?.addEventListener("click", async () => {
+  if (!speechSupported()) {
+    appendCoachMsg("system", "Speech recognition needs Chrome or Edge. You can still type questions below.");
+    $("#coachInput")?.focus();
+    return;
+  }
+  if (micHandle) {
+    stopMic();
+    return;
+  }
+
+  try { synth?.cancel(); } catch { /* ignore */ }
+
+  $("#coachMic").classList.add("listening");
+  $("#coachMic").setAttribute("aria-pressed", "true");
+  appendCoachMsg("system", "Requesting mic…");
+
+  try {
+    await ensureMicPermission();
+  } catch (e) {
+    stopMic();
+    const name = e?.name || "";
+    const msg = (name === "NotAllowedError" || name === "SecurityError")
+      ? micErrorMessage("not-allowed")
+      : (name === "NotFoundError" ? micErrorMessage("audio-capture") : `Mic permission failed: ${e?.message || e}`);
+    appendCoachMsg("system", msg);
+    $("#coachInput")?.focus();
+    return;
+  }
+
+  clearListeningHint();
+  appendCoachMsg("system", "Listening… speak now.");
+
+  let gotFinal = false;
+  const handle = listenSpeech({
+    onInterim: (text) => {
+      if (text) $("#coachInput").value = text;
+    },
+    onResult: (text) => {
+      gotFinal = true;
+      $("#coachInput").value = text;
+      clearListeningHint();
+      askCoach(text);
+    },
+    onError: (err) => {
+      clearListeningHint();
+      const msg = micErrorMessage(err);
+      if (msg) appendCoachMsg("system", msg);
+      if (err === "network" || err === "not-allowed") $("#coachInput")?.focus();
+    },
+    onEnd: () => {
+      micHandle = null;
+      $("#coachMic")?.classList.remove("listening");
+      $("#coachMic")?.setAttribute("aria-pressed", "false");
+    },
+  });
+
+  if (!handle) {
+    stopMic();
+    appendCoachMsg("system", micErrorMessage("unsupported"));
+    return;
+  }
+  micHandle = handle;
+});
 
 // Learn this user's normal from their valid reps (silently). A rep much smaller than the others isn't used.
 function learn(x, amp) {
@@ -265,20 +516,38 @@ function draw(res, world) {
   const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, v: Math.min(a.v, b.v) });
   p.neck = mid(p.ls, p.rs); p.pelvis = mid(p.lh, p.rh);
 
+  const bad = activeHighlight();
   ctx.save();
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = px(6);
-  ctx.strokeStyle = "rgba(255,255,255,0.95)"; ctx.lineWidth = px(4.5);
-  ctx.beginPath();
+  ctx.lineWidth = px(4.5);
+  // Draw each bone separately so offending segments can turn red (like main SkeletonOverlay).
   for (const [a, b] of BONES) {
-    if (p[a].v < 0.4 || p[b].v < 0.4) continue;    // skip joints MediaPipe is guessing
+    if (p[a].v < 0.4 || p[b].v < 0.4) continue;
+    const hot = bad && (bad.has(a) || bad.has(b));
+    ctx.strokeStyle = hot ? BONE_BAD : BONE_OK;
+    ctx.shadowColor = hot ? "rgba(239,68,68,0.45)" : "rgba(0,0,0,0.35)";
+    ctx.beginPath();
     ctx.moveTo(p[a].x, p[a].y); ctx.lineTo(p[b].x, p[b].y);
+    ctx.stroke();
   }
-  ctx.stroke();
-  ctx.shadowBlur = 0; ctx.fillStyle = "#fff"; ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = px(1.5);
+  ctx.shadowBlur = 0;
   for (const k of DOTS) {
     if (p[k].v < 0.4) continue;
-    ctx.beginPath(); ctx.arc(p[k].x, p[k].y, px(5.5), 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    const hot = bad && bad.has(k);
+    ctx.beginPath();
+    ctx.arc(p[k].x, p[k].y, px(hot ? 7.5 : 5.5), 0, 2 * Math.PI);
+    ctx.fillStyle = hot ? DOT_BAD : DOT_OK;
+    ctx.fill();
+    if (hot) {
+      ctx.strokeStyle = "rgba(239,68,68,0.4)";
+      ctx.lineWidth = px(5);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctx.lineWidth = px(1.5);
+      ctx.stroke();
+    }
   }
   if (world && model) drawAngles(world, px, W, H);
   ctx.restore();
@@ -356,8 +625,11 @@ async function start() {
     await loadLandmarker();
     seg.reset(); gate.reset(); cal = new Calibrator(model.calibration); calAmps = [];
     phase = "setup"; outFrames = 0; repCount = 0; lastTime = -1; facingHist = []; smoothImg = null; shownAngle = {}; smoothAngle = {};
+    clearHighlight();
     $("#latest").innerHTML = `<div class="muted">${CALIBRATE}</div>`;
-    showCount("get into position"); resetLog(); lastSetupSpoken = ""; lastSetupAt = 0;
+    showCount("get into position"); resetLog(); resetCoachUi();
+    sessionMemory.start({ exercise: model.exercise, target: setSize() });
+    lastSetupSpoken = ""; lastSetupAt = 0;
     $("#idle").hidden = true; $("#counter").hidden = false; $("#stage").classList.add("live");
     if (source === "webcam") {
       stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: "user" }, audio: false });
@@ -552,6 +824,17 @@ document.addEventListener("keydown", (e) => {
   if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.target.closest("input, select, textarea")) toggleFullscreen();
 });
 
+function setMobility(m) {
+  if (m === "limited") m = "moderate";   // older saved names
+  if (m === "small") m = "slight";
+  mobility = MOBILITY[m] ? m : "standard";
+  try { localStorage.setItem("formcheck.mobility", mobility); } catch (e) { /* storage blocked */ }
+  pressed($("#mobilitySeg"), $(`#mobilitySeg [data-m="${mobility}"]`));
+  if (gate) gate.rules = rulesFor(currentEx, mobility);   // applies right away, even mid-session
+  if (model) $("#howto").innerHTML = `${HOWTO[currentEx]}<br><br>${CALIBRATE}${mobilityNote()}`;
+}
+$("#mobilitySeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMobility(b.dataset.m); });
+
 $("#start").onclick = start;
 $("#stop").onclick = () => { stop(); $("#status").textContent = "Stopped."; };
 $("#resetTally").onclick = () => { tally = { n: 0, exact: 0, binary: 0 }; $("#tally").textContent = ""; };
@@ -560,6 +843,7 @@ $("#resetTally").onclick = () => { tally = { n: 0, exact: 0, binary: 0 }; $("#ta
 const params = new URLSearchParams(location.search);
 const ex0 = EXERCISES.includes(params.get("ex")) ? params.get("ex") : EXERCISES[0];
 await loadModel(ex0);
+setMobility(params.get("mobility") || mobility);
 showCount("");
 if (params.get("video")) { setSource("file"); $("#fileName").textContent = params.get("video").split("/").pop(); }
 // The model detects the mistake type by itself. The "I'm doing…" selector is only a testing aid (?test=1).
