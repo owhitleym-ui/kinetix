@@ -1,0 +1,6 @@
+# Training (training/train_rehab26.py)
+numpy==2.5.4
+scikit-learn==1.9.1
+
+# Headless-Chrome browser tests (tests/*.py)
+websocket-client==1.9.2

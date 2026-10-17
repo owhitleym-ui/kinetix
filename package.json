@@ -1,0 +1,12 @@
+{
+  "name": "form-check",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live, on-device movement feedback for physical therapy exercises (MediaPipe Pose + per-exercise mistake classifiers).",
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8801 --bind 127.0.0.1 --directory web",
+    "test": "node tests/parity_test.mjs && node tests/sim_test.mjs",
+    "tune": "node tests/tune.mjs"
+  }
+}
