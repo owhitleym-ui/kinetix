@@ -1,6 +1,7 @@
 """
 Rep quality / mistake scoring.
-Prefers EC3D sequence classifiers under backend/models/, then OCI endpoint, then heuristic.
+Prefers Data-test-2 joint-interval labels on frames (bird_dog / side_plank),
+then OCI endpoint, then EC3D classifiers, then heuristic.
 """
 
 from __future__ import annotations
@@ -54,10 +55,37 @@ ERROR_ALIAS = {
     "arched_back": "arched_back",
     "hunch_back": "hunch_back",
     "other": "asymmetric",
+    # Data-test-2 joint interval labels
+    "leg_too_high": "leg_too_high",
+    "leg_too_low": "leg_too_low",
+    "leg_not_extended": "leg_not_extended",
+    "support_knee_too_closed": "support_knee_too_closed",
+    "support_knee_too_open": "support_knee_too_open",
+    "arm_too_low": "arm_too_low",
+    "arm_too_high": "arm_too_high",
+    "lumbar_hyperextension": "lumbar_hyperextension",
+    "lumbar_rounding": "lumbar_rounding",
+    "trunk_rotation": "trunk_rotation",
+    "lateral_hip_shift": "lateral_hip_shift",
+    "head_lifting": "head_lifting",
+    "head_dropped": "head_dropped",
+    "hip_sag": "hip_sag",
+    "hip_pike": "hip_pike",
+    "knees_too_closed": "knees_too_closed",
+    "knees_too_open": "knees_too_open",
+    "shoulder_collapse": "shoulder_collapse",
+    "elbow_too_far": "elbow_too_far",
+    "pelvic_rotation": "pelvic_rotation",
+    "head_tilt": "head_tilt",
 }
 
 
 def score_rep_quality(payload: dict[str, Any]) -> dict[str, Any]:
+    # Live coach stamps errorType from StreamJudge during HOLD
+    interval = _score_joint_intervals(payload)
+    if interval is not None:
+        return interval
+
     endpoint = os.getenv("OCI_MODEL_ENDPOINT")
     if endpoint:
         try:
@@ -78,6 +106,33 @@ def score_rep_quality(payload: dict[str, Any]) -> dict[str, Any]:
             pass
 
     return _heuristic_score(payload)
+
+
+def _score_joint_intervals(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Majority vote of StreamJudge labels written onto frames by the browser coach."""
+    exercise = str(payload.get("exercise") or "")
+    if exercise not in ("bird_dog", "side_plank"):
+        return None
+    frames = payload.get("frames") or []
+    if not frames:
+        return None
+    errors = [f.get("errorType") for f in frames if f.get("errorType")]
+    if not errors:
+        return {
+            "quality": "correct",
+            "error_type": None,
+            "confidence": 0.8,
+            "source": "joint_intervals",
+        }
+    top, count = Counter(errors).most_common(1)[0]
+    ratio = count / max(1, len(frames))
+    return {
+        "quality": "incorrect",
+        "error_type": ERROR_ALIAS.get(str(top), str(top)),
+        "confidence": min(0.95, 0.55 + ratio),
+        "source": "joint_intervals",
+        "raw_label": str(top),
+    }
 
 
 @lru_cache(maxsize=4)

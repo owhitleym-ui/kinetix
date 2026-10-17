@@ -8,7 +8,6 @@ import {
 } from "@/lib/baseline";
 import {
   createPhaseTracker,
-  evaluateCorrection,
   getCueText,
   updatePhaseTracker,
 } from "@/lib/corrections";
@@ -20,6 +19,7 @@ import {
   loadExerciseWeights,
   updateExerciseClassifier,
 } from "@/lib/exerciseClassifier";
+import { LiveCoach, SUPPORTED_EXERCISES } from "@/lib/liveCoach";
 import { drawSkeleton } from "@/components/SkeletonOverlay";
 import CorrectionCue from "@/components/CorrectionCue";
 import RepScoreCard from "@/components/RepScoreCard";
@@ -27,11 +27,13 @@ import styles from "@/styles/session.module.css";
 
 const CALIBRATION_REPS = 3;
 const GENAI_THROTTLE_MS = 3000;
+const GOOD_CUE_THROTTLE_MS = 4000;
 
 /**
- * Webcam + MediaPipe + calibration + live corrections.
+ * Webcam + MediaPipe + calibration + Data-test-2 interval coaching.
  *
  * Modes: loading → calibrate → coaching → done
+ * Live cues: StreamJudge held-posture intervals for bird_dog / side_plank.
  */
 export default function PoseCamera({ language = "en", patientId = "demo-patient" }) {
   const videoRef = useRef(null);
@@ -46,8 +48,11 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
   const highlightRef = useRef([]);
   const lastGenAiKeyRef = useRef(null);
   const lastGenAiAtRef = useRef(0);
+  const lastGoodCueAtRef = useRef(0);
+  const lastSpokenLabelRef = useRef(null);
   const exerciseClassifierRef = useRef(createExerciseClassifier());
   const detectedExerciseRef = useRef("unknown");
+  const liveCoachRef = useRef(null);
 
   const [mode, setMode] = useState("loading"); // loading | calibrate | coaching | done | error
   const [statusMsg, setStatusMsg] = useState("Loading pose model…");
@@ -96,13 +101,16 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         finalizeBaseline(baselineRef.current);
         trackerRef.current = createPhaseTracker();
         setMode("coaching");
-        setStatusMsg("Calibration complete. Continue squatting");
+        setStatusMsg(
+          "Hold bird dog or side plank — coaching uses correct/incorrect intervals"
+        );
         setCue({
           text:
             languageRef.current === "es"
-              ? "¡Listo! Sigue haciendo sentadillas"
-              : "You're calibrated. Keep going",
+              ? "¡Listo! Mantén la postura"
+              : "You're calibrated. Hold your posture",
           errorType: null,
+          tone: "good",
         });
       } else {
         setStatusMsg(`Calibration: ${next}/${CALIBRATION_REPS} reps. Keep going`);
@@ -115,7 +123,7 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       const exercise =
         detectedExerciseRef.current !== "unknown"
           ? detectedExerciseRef.current
-          : "squat";
+          : "bird_dog";
       const payload = {
         patient_id: patientIdRef.current,
         exercise,
@@ -190,6 +198,12 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
     const ctx = canvas.getContext("2d");
     const landmarks = results.poseLandmarks;
+    // World landmarks preferred for metre-scale interval metrics
+    const world =
+      results.poseWorldLandmarks?.length >= 33
+        ? results.poseWorldLandmarks
+        : landmarks;
+
     const metrics = extractJointMetrics(landmarks);
     if (!metrics) {
       drawSkeleton(ctx, landmarks, w, h, []);
@@ -207,45 +221,92 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
     const tracker = updatePhaseTracker(trackerRef.current, metrics);
     trackerRef.current = tracker;
-    setPhase(tracker.phase);
 
     if (modeRef.current === "calibrate" && tracker.phase !== "standing") {
       accumulateFrame(baselineRef.current, tracker.phase, metrics);
     }
 
-    // Squat coaching only when squat (or unknown during transition); lunge/plank cues later
-    let correction = null;
-    const canCoachSquat =
-      detected.label === "squat" || detected.label === "unknown";
-    if (
+    const canCoach =
       modeRef.current === "coaching" &&
-      tracker.phase !== "standing" &&
-      canCoachSquat
-    ) {
-      correction = evaluateCorrection(baselineRef.current, tracker.phase, metrics);
-      if (correction && tracker.framesInRep.length) {
-        const last = tracker.framesInRep[tracker.framesInRep.length - 1];
-        last.errorType = correction.errorType;
+      SUPPORTED_EXERCISES.includes(detected.label);
+
+    let coachOut = null;
+    if (canCoach) {
+      if (!liveCoachRef.current || liveCoachRef.current.ex !== detected.label) {
+        liveCoachRef.current = new LiveCoach(detected.label);
       }
+      coachOut = liveCoachRef.current.step(world);
+
+      if (tracker.framesInRep.length && coachOut.cues?.[0]) {
+        const last = tracker.framesInRep[tracker.framesInRep.length - 1];
+        last.errorType = coachOut.cues[0].label;
+        last.phase = coachOut.phase;
+      }
+    } else if (
+      liveCoachRef.current &&
+      !SUPPORTED_EXERCISES.includes(detected.label)
+    ) {
+      liveCoachRef.current = null;
     }
 
-    highlightRef.current = correction?.highlightJoints || [];
+    const displayPhase = coachOut?.phase || tracker.phase;
+    setPhase(displayPhase);
+
+    highlightRef.current = coachOut?.highlightJoints || [];
     drawSkeleton(ctx, landmarks, w, h, highlightRef.current);
 
-    if (correction) {
-      const text = getCueText(correction.errorType, languageRef.current);
-      setCue({ text, errorType: correction.errorType, source: "local", tone: "bad" });
-      speakCue(text, languageRef.current);
-      requestGenAiCue(correction);
-    } else if (
-      modeRef.current === "coaching" &&
-      canCoachSquat &&
-      tracker.phase !== "standing"
-    ) {
-      // Moving with no flagged error → positive form check
-      const text = getCueText("well_done", languageRef.current);
-      setCue({ text, errorType: null, tone: "good", source: "local" });
-      speakCue(text, languageRef.current);
+    if (canCoach && coachOut) {
+      if (!coachOut.calibrated) {
+        setStatusMsg(
+          languageRef.current === "es"
+            ? "Calibrando marco corporal…"
+            : "Calibrating body frame…"
+        );
+      } else if (coachOut.phase === "hold" && coachOut.cues?.length) {
+        const top = coachOut.cues[0];
+        const text =
+          languageRef.current === "es"
+            ? getCueText(top.label, "es") || top.cue
+            : top.cue || getCueText(top.label, "en");
+        setCue({
+          text,
+          errorType: top.label,
+          source: "joint_intervals",
+          tone: "bad",
+        });
+        if (lastSpokenLabelRef.current !== top.label) {
+          lastSpokenLabelRef.current = top.label;
+          speakCue(text, languageRef.current);
+          requestGenAiCue({
+            errorType: top.label,
+            baseline: 0,
+            current: top.fix ?? 0,
+          });
+        }
+      } else if (coachOut.phase === "hold" && !coachOut.cues?.length) {
+        lastSpokenLabelRef.current = null;
+        const now = Date.now();
+        if (now - lastGoodCueAtRef.current > GOOD_CUE_THROTTLE_MS) {
+          lastGoodCueAtRef.current = now;
+          const text = getCueText("well_done", languageRef.current);
+          setCue({
+            text,
+            errorType: null,
+            tone: "good",
+            source: "joint_intervals",
+          });
+          speakCue(text, languageRef.current);
+        }
+      } else if (coachOut.phase === "moving") {
+        lastSpokenLabelRef.current = null;
+        setStatusMsg(
+          languageRef.current === "es"
+            ? "Muévete a la posición de retención…"
+            : "Move into the hold…"
+        );
+      } else if (coachOut.phase === "rest") {
+        lastSpokenLabelRef.current = null;
+      }
     }
 
     if (tracker.lastCompletedRep) {
@@ -261,7 +322,6 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
     async function init() {
       try {
         setStatusMsg("Starting camera…");
-        // Wait for video element to mount
         if (!videoRef.current) {
           await new Promise((r) => requestAnimationFrame(r));
         }
@@ -291,12 +351,13 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         }
         cameraRef.current = cam;
         setMode("calibrate");
-        setStatusMsg(`Calibration: do ${CALIBRATION_REPS} slow squats`);
+        setStatusMsg(
+          `Calibration: do ${CALIBRATION_REPS} slow reps (bird dog or side plank)`
+        );
       } catch (err) {
         console.error(err);
         if (!cancelled) {
           const msg = String(err?.message || err || "Camera / pose init failed");
-          // Common after HMR / double-init — soft hint to hard-refresh
           if (msg.includes("arguments") || msg.includes("Aborted")) {
             setError("Pose model crashed — hard refresh the page (Ctrl+Shift+R)");
           } else {
@@ -313,7 +374,6 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       cancelled = true;
       cameraRef.current?.stop();
       cameraRef.current = null;
-      // Prefer stopping the camera loop before closing WASM
       try {
         poseRef.current?.close?.();
       } catch {
@@ -330,8 +390,9 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       exercise:
         detectedExerciseRef.current !== "unknown"
           ? detectedExerciseRef.current
-          : "squat",
+          : "bird_dog",
       baseline: serializeBaseline(baselineRef.current),
+      coach: "joint_intervals",
       reps: sessionFramesRef.current.map((r) => ({
         rep: r.rep,
         score: r.score,
@@ -363,7 +424,6 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         </div>
       </div>
 
-      {/* Outside camera: big detected exercise name */}
       <div className={styles.belowCamera} aria-live="polite">
         {detectedExercise.label !== "unknown" ? (
           <h2 className={styles.exerciseHero}>{detectedExercise.displayName}</h2>

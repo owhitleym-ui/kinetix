@@ -28,6 +28,7 @@ export default function RepScoreCard({ score, repNumber }) {
 
 function sourceLabel(source) {
   const map = {
+    joint_intervals: "interval rules",
     ec3d_mistake: "EC3D model",
     ec3d_quality: "EC3D quality",
     oci_model_deployment: "OCI model",
@@ -51,6 +52,27 @@ function formatError(t) {
     knee_passes_toe: "Knee past toe",
     arched_back: "Arched back",
     hunch_back: "Hunched back",
+    leg_too_high: "Leg too high",
+    leg_too_low: "Leg too low",
+    leg_not_extended: "Leg not extended",
+    support_knee_too_closed: "Support knee closed",
+    support_knee_too_open: "Support knee open",
+    arm_too_low: "Arm too low",
+    arm_too_high: "Arm too high",
+    lumbar_hyperextension: "Lumbar hyperextension",
+    lumbar_rounding: "Lumbar rounding",
+    trunk_rotation: "Trunk rotation",
+    lateral_hip_shift: "Lateral hip shift",
+    head_lifting: "Head lifting",
+    head_dropped: "Head dropped",
+    hip_sag: "Hip sag",
+    hip_pike: "Hip pike",
+    knees_too_closed: "Knees too closed",
+    knees_too_open: "Knees too open",
+    shoulder_collapse: "Shoulder collapse",
+    elbow_too_far: "Elbow too far",
+    pelvic_rotation: "Pelvic rotation",
+    head_tilt: "Head tilt",
   };
   return map[t] || t;
 }

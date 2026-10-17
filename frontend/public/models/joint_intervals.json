@@ -1,0 +1,182 @@
+{
+  "bird_dog": [
+    {
+      "metric": "moving_knee_deg",
+      "kind": "interior",
+      "lo": 165,
+      "hi": 180,
+      "low": {
+        "label": "leg_not_extended",
+        "cue": "Straighten your back leg."
+      },
+      "high": null
+    },
+    {
+      "metric": "support_knee_deg",
+      "kind": "interior",
+      "lo": 80,
+      "hi": 100,
+      "low": {
+        "label": "support_knee_too_closed",
+        "cue": "Bring your support knee under your hip."
+      },
+      "high": {
+        "label": "support_knee_too_open",
+        "cue": "Bring your support knee under your hip."
+      }
+    },
+    {
+      "metric": "leg_vs_trunk_deg",
+      "kind": "signed",
+      "lo": -10,
+      "hi": 10,
+      "low": {
+        "label": "leg_too_low",
+        "cue": "Lift your leg up to trunk height."
+      },
+      "high": {
+        "label": "leg_too_high",
+        "cue": "Lower your leg to trunk height."
+      }
+    },
+    {
+      "metric": "arm_flexion_deg",
+      "kind": "interior",
+      "lo": 85,
+      "hi": 115,
+      "low": {
+        "label": "arm_too_low",
+        "cue": "Reach your arm out to shoulder height."
+      },
+      "high": {
+        "label": "arm_too_high",
+        "cue": "Lower your arm to shoulder height."
+      }
+    },
+    {
+      "metric": "spine_sag_ratio",
+      "kind": "linear",
+      "lo": -0.04,
+      "hi": 0.04,
+      "low": {
+        "label": "lumbar_rounding",
+        "cue": "Don't round your back; keep it flat."
+      },
+      "high": {
+        "label": "lumbar_hyperextension",
+        "cue": "Brace your core, don't let your belly sag."
+      }
+    },
+    {
+      "metric": "trunk_rotation_deg",
+      "kind": "signed",
+      "lo": -8,
+      "hi": 8,
+      "low": {
+        "label": "trunk_rotation",
+        "cue": "Keep your shoulders square to the floor."
+      },
+      "high": {
+        "label": "trunk_rotation",
+        "cue": "Keep your shoulders square to the floor."
+      }
+    },
+    {
+      "metric": "pelvis_lateral_shift_m",
+      "kind": "linear",
+      "lo": -0.03,
+      "hi": 0.03,
+      "low": {
+        "label": "lateral_hip_shift",
+        "cue": "Keep your hips centred, don't shift sideways."
+      },
+      "high": {
+        "label": "lateral_hip_shift",
+        "cue": "Keep your hips centred, don't shift sideways."
+      }
+    },
+    {
+      "metric": "head_vs_trunk_deg",
+      "kind": "signed",
+      "lo": -25,
+      "hi": 5,
+      "low": {
+        "label": "head_dropped",
+        "cue": "Lift your gaze slightly; keep your neck long."
+      },
+      "high": {
+        "label": "head_lifting",
+        "cue": "Look at the floor, keep your neck neutral."
+      }
+    }
+  ],
+  "side_plank": [
+    {
+      "metric": "hip_line_dev_deg",
+      "kind": "signed",
+      "lo": -10,
+      "hi": 10,
+      "low": {
+        "label": "hip_sag",
+        "cue": "Lift your hips up in line with your shoulders and knees."
+      },
+      "high": {
+        "label": "hip_pike",
+        "cue": "Lower your hips a little to make a straight line."
+      }
+    },
+    {
+      "metric": "knee_flex_deg",
+      "kind": "interior",
+      "lo": 80,
+      "hi": 100,
+      "low": {
+        "label": "knees_too_closed",
+        "cue": "Open your knees to about 90 degrees."
+      },
+      "high": {
+        "label": "knees_too_open",
+        "cue": "Bend your knees to about 90 degrees."
+      }
+    },
+    {
+      "metric": "elbow_deg",
+      "kind": "interior",
+      "lo": 80,
+      "hi": 100,
+      "low": {
+        "label": "shoulder_collapse",
+        "cue": "Push the floor away; lift out of your shoulder."
+      },
+      "high": {
+        "label": "elbow_too_far",
+        "cue": "Stack your elbow under your shoulder."
+      }
+    },
+    {
+      "metric": "pelvic_rotation_deg",
+      "kind": "signed",
+      "lo": -10,
+      "hi": 10,
+      "low": {
+        "label": "pelvic_rotation",
+        "cue": "Stack your hips, don't roll forward or back."
+      },
+      "high": {
+        "label": "pelvic_rotation",
+        "cue": "Stack your hips, don't roll forward or back."
+      }
+    },
+    {
+      "metric": "head_drop_deg",
+      "kind": "interior",
+      "lo": 0,
+      "hi": 11,
+      "low": null,
+      "high": {
+        "label": "head_tilt",
+        "cue": "Keep your head in line with your spine."
+      }
+    }
+  ]
+}

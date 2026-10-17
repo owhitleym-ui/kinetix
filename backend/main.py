@@ -81,7 +81,7 @@ def root():
         "note": "This is the backend API. Open the app at http://localhost:3000",
         "endpoints": {
             "GET /health": "liveness check",
-            "POST /score-rep": "EC3D rep quality / mistake score",
+            "POST /score-rep": "joint-interval / EC3D rep quality score",
             "POST /sessions": "save keypoint session",
             "GET /sessions": "list sessions",
             "POST /generate-cue": "plain language cue",

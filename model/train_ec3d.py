@@ -1,22 +1,18 @@
 """
-Train exercise + mistake classifiers on EC3D (Data/data_3D.pickle).
+Train exercise + mistake classifiers on synthetic lower-back data only:
+  Data/synthetic_lowerback_3D.pickle  (bird_dog, side_plank)
 
 Exports:
   backend/models/exercise_classifier.joblib
   backend/models/mistake_classifier.joblib
-  frontend/public/models/exercise_weights.json  (runs in browser)
-
-Label map (EC3D paper Table 1, lab codes observed in pickle):
-  1 correct | 2 feet_too_wide | 3 knees_inward | 4 not_low_enough
-  5 front_bent | 6 knee_passes_toe | 7 arched_back | 8 hunch_back
+  backend/models/rep_classifier.joblib
+  frontend/public/models/exercise_weights.json
 """
 
 from __future__ import annotations
 
 import json
 import pickle
-import sys
-from collections import defaultdict
 from pathlib import Path
 
 import joblib
@@ -29,11 +25,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "Data" / "data_3D.pickle"
+DATA_LOWERBACK = ROOT / "Data" / "synthetic_lowerback_3D.pickle"
 OUT_BACKEND = ROOT / "backend" / "models"
 OUT_FRONTEND = ROOT / "frontend" / "public" / "models"
 
-# NTU-style 25-joint indices
 J = {
     "spine": 0,
     "mid_spine": 1,
@@ -52,21 +47,21 @@ J = {
 }
 
 EXERCISE_MAP = {
-    "SQUAT": "squat",
-    "Lunges": "lunge",
-    "Plank": "plank",
+    "bird_dog": "bird_dog",
+    "side_plank": "side_plank",
 }
 
-MISTAKE_MAP = {
-    1: "correct",
-    2: "feet_too_wide",
-    3: "knees_inward",
-    4: "not_low_enough",
-    5: "front_bent",
-    6: "knee_passes_toe",
-    7: "arched_back",
-    8: "hunch_back",
-    10: "other",
+LOWERBACK_MISTAKES = {
+    "correct",
+    "leg_too_high",
+    "lumbar_hyperextension",
+    "trunk_rotation",
+    "lateral_hip_shift",
+    "head_lifting",
+    "hip_sag",
+    "pelvic_rotation",
+    "shoulder_collapse",
+    "head_tilt",
 }
 
 FEATURE_NAMES = [
@@ -85,6 +80,13 @@ FEATURE_NAMES = [
     "torso_horiz",
 ]
 
+SEQ_FEATURE_NAMES = (
+    [f"{n}_mean" for n in FEATURE_NAMES]
+    + [f"{n}_std" for n in FEATURE_NAMES]
+    + [f"{n}_min" for n in FEATURE_NAMES]
+    + [f"{n}_max" for n in FEATURE_NAMES]
+)
+
 
 def angle(a, b, c):
     ba = a - b
@@ -99,8 +101,6 @@ def angle(a, b, c):
 
 def back_tilt(shoulder_mid, hip_mid):
     d = hip_mid - shoulder_mid
-    # angle from vertical (y axis up in many mocap; EC3D appears y-up-ish)
-    # use angle between torso vector and world up [0,1,0]
     up = np.array([0.0, 1.0, 0.0])
     n = np.linalg.norm(d)
     if n < 1e-8:
@@ -110,8 +110,7 @@ def back_tilt(shoulder_mid, hip_mid):
 
 
 def frame_features(pose_3x25: np.ndarray) -> np.ndarray:
-    """pose: (3, 25) xyz."""
-    p = pose_3x25.T  # (25, 3)
+    p = pose_3x25.T
 
     def j(name):
         return p[J[name]]
@@ -123,11 +122,6 @@ def frame_features(pose_3x25: np.ndarray) -> np.ndarray:
     sh_mid = 0.5 * (j("l_shoulder") + j("r_shoulder"))
     hip_mid = 0.5 * (j("l_hip") + j("r_hip"))
     bt = back_tilt(sh_mid, hip_mid)
-    ankle_y_delta = abs(j("l_ankle")[1] - j("r_ankle")[1])
-    foot_spread = abs(j("l_ankle")[0] - j("r_ankle")[0])
-    shoulder_hip_y = abs(sh_mid[1] - hip_mid[1])
-    torso_horiz = abs(90.0 - bt)  # closer to 0 => more horizontal
-
     return np.array(
         [
             lk,
@@ -137,19 +131,18 @@ def frame_features(pose_3x25: np.ndarray) -> np.ndarray:
             bt,
             abs(lk - rk),
             abs(lh - rh),
-            ankle_y_delta,
-            foot_spread,
-            shoulder_hip_y,
+            abs(j("l_ankle")[1] - j("r_ankle")[1]),
+            abs(j("l_ankle")[0] - j("r_ankle")[0]),
+            abs(sh_mid[1] - hip_mid[1]),
             0.5 * (lk + rk),
             hip_mid[1],
-            torso_horiz,
+            abs(90.0 - bt),
         ],
         dtype=np.float64,
     )
 
 
 def aggregate_sequence_features(frame_feats: np.ndarray) -> np.ndarray:
-    """Mean + std + min + max over frames → sequence vector."""
     if frame_feats.ndim != 2 or len(frame_feats) == 0:
         return np.zeros(len(FEATURE_NAMES) * 4, dtype=np.float64)
     return np.concatenate(
@@ -162,53 +155,45 @@ def aggregate_sequence_features(frame_feats: np.ndarray) -> np.ndarray:
     )
 
 
-SEQ_FEATURE_NAMES = (
-    [f"{n}_mean" for n in FEATURE_NAMES]
-    + [f"{n}_std" for n in FEATURE_NAMES]
-    + [f"{n}_min" for n in FEATURE_NAMES]
-    + [f"{n}_max" for n in FEATURE_NAMES]
-)
-
-
-def load_sequences(path: Path):
+def load_lowerback_sequences(path: Path):
     with open(path, "rb") as f:
         data = pickle.load(f)
-    labels = data["labels"]
-    poses = data["poses"]  # (N, 3, 25)
-
-    seq_frames = defaultdict(list)
-    for i, row in enumerate(labels):
-        act, sub, lab, rep, _frame = row
-        key = (str(act), str(sub), int(lab), int(rep))
-        seq_frames[key].append(i)
+    coords = data["coords"]
+    sequences = data["sequences"]
 
     X, y_ex, y_mist, groups = [], [], [], []
     X_seq, y_mist_seq, y_ex_seq, groups_seq = [], [], [], []
 
-    for (act, sub, lab, rep), idxs in seq_frames.items():
-        if act not in EXERCISE_MAP:
+    for seq in sequences:
+        key = seq.get("exercise_key")
+        if key not in EXERCISE_MAP:
             continue
-        idxs = sorted(idxs)
-        # sample up to 12 frames evenly through the sequence
-        pick = np.linspace(0, len(idxs) - 1, num=min(12, len(idxs)), dtype=int)
+        label = str(seq.get("label", "other"))
+        if label not in LOWERBACK_MISTAKES:
+            label = "other"
+        sub = str(seq.get("subject_id", "lb0"))
+        start, end = int(seq["start"]), int(seq["end"])
+        n = max(1, end - start)
+        pick = np.linspace(start, end - 1, num=min(12, n), dtype=int)
         feats = []
-        for pi in pick:
-            fi = idxs[pi]
-            feat = frame_features(poses[fi])
+        for fi in pick:
+            feat = frame_features(coords[fi])
             if not np.isfinite(feat).all():
                 continue
             feats.append(feat)
             X.append(feat)
-            y_ex.append(EXERCISE_MAP[act])
-            y_mist.append(MISTAKE_MAP.get(lab, "other"))
+            y_ex.append(EXERCISE_MAP[key])
+            y_mist.append(label)
             groups.append(sub)
 
         if feats:
-            seq_feat = aggregate_sequence_features(np.vstack(feats))
-            X_seq.append(seq_feat)
-            y_mist_seq.append(MISTAKE_MAP.get(lab, "other"))
-            y_ex_seq.append(EXERCISE_MAP[act])
+            X_seq.append(aggregate_sequence_features(np.vstack(feats)))
+            y_mist_seq.append(label)
+            y_ex_seq.append(EXERCISE_MAP[key])
             groups_seq.append(sub)
+
+    if not X:
+        raise SystemExit(f"No samples loaded from {path}")
 
     return (
         np.vstack(X),
@@ -251,8 +236,14 @@ def train_classifier(X, y, groups, name: str):
     return clf
 
 
-def export_logistic_js(X, y, groups, path: Path):
-    """Browser-friendly multinomial logistic weights for exercise ID."""
+def export_logistic_js(
+    X,
+    y,
+    groups,
+    path: Path,
+    dataset_note: str = "bird_dog, side_plank",
+    task: str = "exercise",
+):
     splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=42)
     train_idx, test_idx = next(splitter.split(X, y, groups))
     pipe = Pipeline(
@@ -270,22 +261,23 @@ def export_logistic_js(X, y, groups, path: Path):
     )
     pipe.fit(X[train_idx], y[train_idx])
     acc = pipe.score(X[test_idx], y[test_idx])
-    print(f"Logistic exercise accuracy (JS export): {acc:.3f}")
+    print(f"Logistic {task} accuracy (JS export): {acc:.3f}")
 
     scaler = pipe.named_steps["scaler"]
     lr = pipe.named_steps["lr"]
-    classes = list(lr.classes_)
     payload = {
         "type": "multinomial_logistic",
+        "task": task,
         "feature_names": FEATURE_NAMES,
-        "classes": classes,
+        "classes": list(lr.classes_),
         "mean": scaler.mean_.tolist(),
         "scale": scaler.scale_.tolist(),
-        "coef": lr.coef_.tolist(),  # (n_classes, n_features)
+        "coef": lr.coef_.tolist(),
         "intercept": lr.intercept_.tolist(),
         "accuracy_holdout": float(acc),
-        "dataset": "EC3D",
-        "note": "Trained on Data/data_3D.pickle for browser exercise detection",
+        "dataset": "synthetic_lowerback_3D",
+        "classes_note": dataset_note,
+        "note": "Trained only on Data/synthetic_lowerback_3D.pickle",
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -294,11 +286,13 @@ def export_logistic_js(X, y, groups, path: Path):
 
 
 def main():
-    if not DATA.exists():
-        raise SystemExit(f"Missing dataset: {DATA}")
+    if not DATA_LOWERBACK.exists():
+        raise SystemExit(f"Missing dataset: {DATA_LOWERBACK}")
 
-    print(f"Loading {DATA} …")
-    X, y_ex, y_mist, groups, X_seq, y_mist_seq, y_ex_seq, groups_seq = load_sequences(DATA)
+    print(f"Loading {DATA_LOWERBACK} (synthetic lower-back only) …")
+    X, y_ex, y_mist, groups, X_seq, y_mist_seq, y_ex_seq, groups_seq = load_lowerback_sequences(
+        DATA_LOWERBACK
+    )
     print(f"Frame samples: {len(X)} | exercises: {dict(zip(*np.unique(y_ex, return_counts=True)))}")
     print(f"Sequences: {len(X_seq)} | mistakes: {dict(zip(*np.unique(y_mist_seq, return_counts=True)))}")
 
@@ -306,27 +300,22 @@ def main():
 
     ex_clf = train_classifier(X, y_ex, groups, "Exercise classifier (frame)")
     joblib.dump(
-        {"model": ex_clf, "features": FEATURE_NAMES, "task": "exercise"},
+        {"model": ex_clf, "features": FEATURE_NAMES, "task": "exercise", "dataset": "synthetic_lowerback"},
         OUT_BACKEND / "exercise_classifier.joblib",
     )
-    print(f"Wrote {OUT_BACKEND / 'exercise_classifier.joblib'}")
 
-    mist_clf = train_classifier(
-        X_seq, y_mist_seq, groups_seq, "Mistake classifier (sequence)"
-    )
+    mist_clf = train_classifier(X_seq, y_mist_seq, groups_seq, "Mistake classifier (sequence)")
     joblib.dump(
         {
             "model": mist_clf,
             "features": SEQ_FEATURE_NAMES,
             "base_features": FEATURE_NAMES,
             "task": "mistake_sequence",
-            "aggregation": "mean_std_min_max",
+            "dataset": "synthetic_lowerback",
         },
         OUT_BACKEND / "mistake_classifier.joblib",
     )
-    print(f"Wrote {OUT_BACKEND / 'mistake_classifier.joblib'}")
 
-    # Also keep exercise-conditioned binary quality (correct vs incorrect)
     y_quality = np.array(["correct" if m == "correct" else "incorrect" for m in y_mist_seq])
     q_clf = train_classifier(X_seq, y_quality, groups_seq, "Quality binary (sequence)")
     joblib.dump(
@@ -335,12 +324,27 @@ def main():
             "features": SEQ_FEATURE_NAMES,
             "base_features": FEATURE_NAMES,
             "task": "quality_sequence",
+            "dataset": "synthetic_lowerback",
         },
         OUT_BACKEND / "rep_classifier.joblib",
     )
-    print(f"Wrote {OUT_BACKEND / 'rep_classifier.joblib'}")
 
-    export_logistic_js(X, y_ex, groups, OUT_FRONTEND / "exercise_weights.json")
+    export_logistic_js(
+        X,
+        y_ex,
+        groups,
+        OUT_FRONTEND / "exercise_weights.json",
+        dataset_note="bird_dog, side_plank",
+    )
+    # Frame-level mistake logistic for live browser cues
+    export_logistic_js(
+        X,
+        y_mist,
+        groups,
+        OUT_FRONTEND / "mistake_weights.json",
+        dataset_note="lower-back mistake labels",
+        task="mistake",
+    )
     print("\nDone.")
 
 
