@@ -1,7 +1,12 @@
 """Train the per-exercise form-error classifiers on REHAB26-ViewAngles (MediaPipe world landmarks) and export
 them for the browser.
 
-  python training/train_rehab26.py            (data in data/rehab26, see scripts/get_data.sh)
+  python training/train_rehab26.py            uses data/rehab26 if downloaded (scripts/get_data.sh), otherwise the
+                                              compact dataset in dataset/rehab26_features.npz (ships with the repo)
+  python training/train_rehab26.py --compact  always use the compact dataset
+
+With the compact dataset the models and metrics are reproduced, but the replay files for tests/sim_test.mjs and
+tests/parity_test.mjs (which need raw skeletons) are not written.
 
 Two models per exercise:
   early       reps 1-3: features = change from the rep's own start pose (no per-user calibration needed)
@@ -21,6 +26,7 @@ import csv
 import glob
 import json
 import os
+import sys
 import time
 from collections import Counter, defaultdict
 
@@ -225,11 +231,29 @@ def front_windows(S, person):
     return out
 
 
+FEATURES_FILE = os.path.join(ROOT, "dataset", "rehab26_features.npz")
+
+
+def load_compact(path=FEATURES_FILE):
+    """Samples from the compact dataset (features precomputed by training/export_features.py)."""
+    with np.load(path, allow_pickle=False) as npz:
+        z = {k: npz[k] for k in npz.files}   # read each array once (indexing the npz re-reads it every time)
+    X, D, XV, DV = (z[k].astype(np.float64) for k in ("x", "d", "xv", "dv"))
+    return [{"ex": str(z["ex"][i]), "person": str(z["person"][i]), "video": str(z["video"][i]), "cam": int(z["cam"][i]),
+             "angle": int(z["angle"][i]), "session": str(z["session"][i]), "label": str(z["label"][i]),
+             "a": int(z["a"][i]), "b": int(z["b"][i]), "x": X[i], "d": D[i], "xv": list(XV[i]), "dv": list(DV[i])}
+            for i in range(len(z["label"]))]
+
+
 def main():
     t0 = time.time()
-    samples = build_samples()
+    raw = os.path.exists(os.path.join(DATA, "Segmentation.csv")) and "--compact" not in sys.argv
+    if not raw and not os.path.exists(FEATURES_FILE):
+        raise SystemExit("No training data: run scripts/get_data.sh, or restore dataset/rehab26_features.npz")
+    samples = build_samples() if raw else load_compact()
     people = sorted({s["person"] for s in samples})
-    print(f"{len(samples)} rep-views from {len(people)} people ({time.time() - t0:.0f}s to load + featurize)")
+    print(f"{len(samples)} rep-views from {len(people)} people, "
+          f"{'full skeleton data' if raw else 'compact dataset'} ({time.time() - t0:.0f}s to load)")
     rng = np.random.default_rng(0)
 
     report = {}
@@ -242,7 +266,8 @@ def main():
             for g in sorted({s["session"] for s in S if s["person"] == test}):
                 res += live_predict(m, e, sorted([s for s in S if s["session"] == g], key=lambda s: s["a"]))
             export(m, e, ex, os.path.join(OUT_TEST, f"holdout_{test}_{ex}.json"), {"held_out": test})
-            json.dump(front_windows(S, test), open(os.path.join(OUT_TEST, f"seq_{test}_{ex}.json"), "w"))
+            if raw:  # replay sequences need the raw skeletons
+                json.dump(front_windows(S, test), open(os.path.join(OUT_TEST, f"seq_{test}_{ex}.json"), "w"))
 
         front = [(s["label"], p, k) for s, p, k in res if abs(s["angle"]) <= FRONT]
 
@@ -270,13 +295,15 @@ def main():
         export(fit(S), fit_early(S), ex, os.path.join(OUT_WEB, f"rehab26_{ex}.json"), metrics)
         report[ex] = metrics
 
-    pick = [samples[i] for i in rng.choice(len(samples), 30, replace=False)]
-    rounded = lambda s: np.round(load_world(s["video"], s["cam"])[s["a"]:s["b"], :, :3], 6)
-    json.dump([{"frames": rounded(s).tolist(), "features": RF.rep_features(rounded(s)).tolist(),
-                "delta": RF.rep_features(rounded(s), "delta").tolist()}
-               for s in pick], open(os.path.join(OUT_TEST, "parity.json"), "w"))
+    if raw:  # parity data needs the raw skeletons
+        pick = [samples[i] for i in rng.choice(len(samples), 30, replace=False)]
+        rounded = lambda s: np.round(load_world(s["video"], s["cam"])[s["a"]:s["b"], :, :3], 6)
+        json.dump([{"frames": rounded(s).tolist(), "features": RF.rep_features(rounded(s)).tolist(),
+                    "delta": RF.rep_features(rounded(s), "delta").tolist()}
+                   for s in pick], open(os.path.join(OUT_TEST, "parity.json"), "w"))
     json.dump(report, open(os.path.join(HERE, "report.json"), "w"), indent=2)
-    print(f"\ndone in {time.time() - t0:.0f}s; models in web/models/, test data in tests/data/")
+    print(f"\ndone in {time.time() - t0:.0f}s; models in web/models/" +
+          (", test data in tests/data/" if raw else " (compact dataset: replay test data needs scripts/get_data.sh)"))
 
 
 if __name__ == "__main__":

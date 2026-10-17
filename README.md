@@ -60,28 +60,41 @@ web/                    the app (static files, served as-is)
 training/
   train_rehab26.py      train + evaluate (leave-one-person-out) + export models to web/models/
   rehab_features.py     Python copy of the feature code in web/features.js
+  export_features.py    rebuilds dataset/rehab26_features.npz from the full data
   report.json           metrics from the last training run
+dataset/
+  rehab26_features.npz  compact ready-to-train dataset (every labeled rep as model features + labels, 48 MB)
 tests/
   parity_test.mjs       browser features == training features
   sim_test.mjs          replays held-out people frame by frame through the live pipeline
   tune.mjs, offsets.mjs rep-detection tuning tools
   browser_test.py, load_check.py, fs_check.py   headless-Chrome checks of the real page
-scripts/get_data.sh     downloads the training data into data/ (not committed)
+scripts/get_data.sh     downloads the full skeleton data into data/ (not committed, ~690 MB)
 ```
 
 ## Retrain the models
 
+Works right after cloning, using the compact dataset in `dataset/` (no download, about 10 seconds):
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+python training/train_rehab26.py       # writes web/models/*.json and training/report.json
+```
+
+To change the features themselves or run the replay tests, get the full skeleton data first. Training then uses it
+automatically and also writes `tests/data/`:
+
+```bash
 bash scripts/get_data.sh               # about 690 MB into data/rehab26
-python training/train_rehab26.py       # writes web/models/*.json and tests/data/
+python training/train_rehab26.py
+python training/export_features.py     # optional: refresh dataset/rehab26_features.npz
 ```
 
 ## Tests
 
 ```bash
-npm test                               # needs tests/data/ from a training run
+npm test                               # needs tests/data/ from a training run on the full data
 npm run serve &                        # then, with Google Chrome installed:
 python tests/load_check.py             # page loads without errors
 python tests/browser_test.py testvideos/<clip>.mp4 arm_abduction CORRECT   # clip in web/testvideos/
@@ -123,6 +136,8 @@ because their training data is licensed CC BY-NC 4.0 (details below).
   Orientation in Single- and Multi-View Camera Environments for AI-based Rehabilitation Monitoring*,
   [arXiv:2609.35726](https://doi.org/10.48550/arXiv.2609.35726); dataset
   [doi:10.5281/zenodo.23018127](https://doi.org/10.5281/zenodo.23018127). Licensed **CC BY-NC 4.0**, so the
-  trained models in `web/models/rehab26_*.json` are for non-commercial use.
+  trained models in `web/models/rehab26_*.json` and the derived dataset in `dataset/` are for non-commercial use.
+  `dataset/rehab26_features.npz` is a modified version of that data (features computed from its skeletons), shared
+  under the same license with attribution. The raw data is not included; `scripts/get_data.sh` downloads it.
 - **MediaPipe Pose Landmarker** (Google, Apache 2.0): `web/models/pose_landmarker_full.task` and the
   `@mediapipe/tasks-vision` library loaded from jsDelivr.
