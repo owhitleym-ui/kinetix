@@ -22,12 +22,27 @@ export const CUES = {
     knee_cave: "Push your knees out",
     shallow: "Go deeper",
     asymmetric: "Even out both sides",
+    // EC3D mistake labels (also aliased from /score-rep)
+    feet_too_wide: "Bring your feet closer",
+    knees_inward: "Push your knees out",
+    not_low_enough: "Go deeper",
+    front_bent: "Keep your chest up",
+    knee_passes_toe: "Keep your knee behind your toes",
+    arched_back: "Tuck your hips, flatten your back",
+    hunch_back: "Open your chest, lengthen your spine",
   },
   es: {
     back_round: "Baja la espalda",
     knee_cave: "Empuja las rodillas hacia afuera",
     shallow: "Baja más",
     asymmetric: "Iguala ambos lados",
+    feet_too_wide: "Acerca los pies",
+    knees_inward: "Empuja las rodillas hacia afuera",
+    not_low_enough: "Baja más",
+    front_bent: "Mantén el pecho arriba",
+    knee_passes_toe: "Mantén la rodilla detrás de los dedos",
+    arched_back: "Mete la cadera, aplana la espalda",
+    hunch_back: "Abre el pecho, alarga la columna",
   },
 };
 

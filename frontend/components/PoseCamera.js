@@ -15,6 +15,12 @@ import {
 import { createPose, startCamera } from "@/lib/poseDetection";
 import { speakCue } from "@/lib/voice";
 import { generateCue, scoreRep } from "@/lib/ociClient";
+import {
+  createExerciseClassifier,
+  formatDetectedBadge,
+  loadExerciseWeights,
+  updateExerciseClassifier,
+} from "@/lib/exerciseClassifier";
 import { drawSkeleton } from "@/components/SkeletonOverlay";
 import CorrectionCue from "@/components/CorrectionCue";
 import RepScoreCard from "@/components/RepScoreCard";
@@ -41,6 +47,8 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
   const highlightRef = useRef([]);
   const lastGenAiKeyRef = useRef(null);
   const lastGenAiAtRef = useRef(0);
+  const exerciseClassifierRef = useRef(createExerciseClassifier());
+  const detectedExerciseRef = useRef("unknown");
 
   const [mode, setMode] = useState("loading"); // loading | calibrate | coaching | done | error
   const [statusMsg, setStatusMsg] = useState("Loading pose model…");
@@ -50,6 +58,11 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
   const [cue, setCue] = useState(null);
   const [lastScore, setLastScore] = useState(null);
   const [error, setError] = useState(null);
+  const [detectedExercise, setDetectedExercise] = useState({
+    label: "unknown",
+    confidence: 0,
+    displayName: "Waiting",
+  });
 
   useEffect(() => {
     languageRef.current = language;
@@ -100,9 +113,13 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
     if (modeRef.current === "coaching") {
       setRepCount(completed.repNumber);
+      const exercise =
+        detectedExerciseRef.current !== "unknown"
+          ? detectedExerciseRef.current
+          : "squat";
       const payload = {
         patient_id: patientIdRef.current,
-        exercise: "squat",
+        exercise,
         rep_number: completed.repNumber,
         frames: completed.frames.map((f) => ({
           phase: f.phase,
@@ -117,6 +134,15 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         frames: completed.frames,
         score,
       });
+
+      // Speak EC3D model cue when rep scored incorrect
+      if (score?.quality === "incorrect" && score.error_type) {
+        const text = getCueText(score.error_type, languageRef.current);
+        if (text) {
+          setCue({ text, errorType: score.error_type });
+          speakCue(text, languageRef.current);
+        }
+      }
     }
   };
 
@@ -168,6 +194,15 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       return;
     }
 
+    const detected = updateExerciseClassifier(
+      exerciseClassifierRef.current,
+      landmarks,
+      metrics,
+      languageRef.current
+    );
+    detectedExerciseRef.current = detected.label;
+    setDetectedExercise(detected);
+
     const tracker = updatePhaseTracker(trackerRef.current, metrics);
     trackerRef.current = tracker;
     setPhase(tracker.phase);
@@ -176,8 +211,15 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       accumulateFrame(baselineRef.current, tracker.phase, metrics);
     }
 
+    // Squat coaching only when squat (or unknown during transition); lunge/plank cues later
     let correction = null;
-    if (modeRef.current === "coaching" && tracker.phase !== "standing") {
+    const canCoachSquat =
+      detected.label === "squat" || detected.label === "unknown";
+    if (
+      modeRef.current === "coaching" &&
+      tracker.phase !== "standing" &&
+      canCoachSquat
+    ) {
       correction = evaluateCorrection(baselineRef.current, tracker.phase, metrics);
       if (correction && tracker.framesInRep.length) {
         const last = tracker.framesInRep[tracker.framesInRep.length - 1];
@@ -212,6 +254,7 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         if (!videoRef.current) {
           await new Promise((r) => requestAnimationFrame(r));
         }
+        await loadExerciseWeights();
         const pose = await createPose((results) => {
           if (!cancelled) onResultsRef.current?.(results);
         });
@@ -273,7 +316,10 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
     window.__ptGetSessionPayload = () => ({
       patient_id: patientIdRef.current,
       timestamp: new Date().toISOString(),
-      exercise: "squat",
+      exercise:
+        detectedExerciseRef.current !== "unknown"
+          ? detectedExerciseRef.current
+          : "squat",
       baseline: serializeBaseline(baselineRef.current),
       reps: sessionFramesRef.current.map((r) => ({
         rep: r.rep,
@@ -302,6 +348,20 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
         <div className={styles.overlayTop}>
           <span className={styles.badge}>{modeLabel(mode, language)}</span>
+          <span
+            className={`${styles.badgeDetect} ${
+              detectedExercise.label === "unknown" ? styles.badgeDetectIdle : ""
+            }`}
+            role="status"
+            aria-live="polite"
+            title={
+              detectedExercise.confidence
+                ? `${(detectedExercise.confidence * 100).toFixed(0)}% confidence`
+                : undefined
+            }
+          >
+            {formatDetectedBadge(detectedExercise.label, language)}
+          </span>
           <span className={styles.badgeMuted}>{phase}</span>
         </div>
 
@@ -324,6 +384,12 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
           <Stat
             label={language === "es" ? "Calibración" : "Calibration"}
             value={`${calibReps}/${CALIBRATION_REPS}`}
+          />
+        )}
+        {(mode === "calibrate" || mode === "coaching") && (
+          <Stat
+            label={language === "es" ? "Ejercicio" : "Exercise"}
+            value={detectedExercise.displayName}
           />
         )}
         {mode === "coaching" && (

@@ -70,6 +70,25 @@ class CueRequest(BaseModel):
     language: str = "en"
 
 
+@app.get("/")
+def root():
+    """Browser-friendly landing so http://127.0.0.1:8001 is not a bare 404."""
+    return {
+        "service": "PT Form Coach API",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+        "note": "This is the backend API. Open the app at http://localhost:3000",
+        "endpoints": {
+            "GET /health": "liveness check",
+            "POST /score-rep": "EC3D rep quality / mistake score",
+            "POST /sessions": "save keypoint session",
+            "GET /sessions": "list sessions",
+            "POST /generate-cue": "plain language cue",
+        },
+    }
+
+
 @app.get("/health")
 def health():
     return {

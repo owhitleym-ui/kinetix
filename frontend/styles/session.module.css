@@ -144,6 +144,25 @@
   text-transform: capitalize;
 }
 
+.badgeDetect {
+  background: rgba(196, 92, 38, 0.95);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badgeDetectIdle {
+  background: rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+}
+
 .cueBanner {
   position: absolute;
   left: 50%;

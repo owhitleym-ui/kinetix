@@ -13,9 +13,7 @@ export default function RepScoreCard({ score, repNumber }) {
     >
       <div className={styles.scoreHeader}>
         <span>Rep {repNumber}</span>
-        <span className={styles.scoreSource}>
-          {score.source === "local" ? "on device" : "OCI model"}
-        </span>
+        <span className={styles.scoreSource}>{sourceLabel(score.source)}</span>
       </div>
       <div className={styles.scoreQuality}>{ok ? "Correct" : "Needs work"}</div>
       {!ok && score.error_type && (
@@ -28,12 +26,31 @@ export default function RepScoreCard({ score, repNumber }) {
   );
 }
 
+function sourceLabel(source) {
+  const map = {
+    ec3d_mistake: "EC3D model",
+    ec3d_quality: "EC3D quality",
+    oci_model_deployment: "OCI model",
+    local_model: "local model",
+    local: "on device",
+    heuristic: "on device",
+  };
+  return map[source] || source || "model";
+}
+
 function formatError(t) {
   const map = {
-    knee_cave: "Knee cave",
-    back_round: "Back rounding",
-    shallow: "Insufficient depth",
+    knee_cave: "Knees inward",
+    back_round: "Torso lean",
+    shallow: "Not low enough",
     asymmetric: "Asymmetry",
+    feet_too_wide: "Feet too wide",
+    knees_inward: "Knees inward",
+    not_low_enough: "Not low enough",
+    front_bent: "Front bent",
+    knee_passes_toe: "Knee past toe",
+    arched_back: "Arched back",
+    hunch_back: "Hunched back",
   };
   return map[t] || t;
 }
