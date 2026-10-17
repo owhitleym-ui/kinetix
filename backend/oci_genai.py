@@ -71,36 +71,47 @@ def _call_oci_genai(
         f"Language: {language}."
     )
 
-    config_file = os.getenv("OCI_CONFIG_FILE")
-    if config_file:
-        config = oci.config.from_file(config_file, os.getenv("OCI_CONFIG_PROFILE", "DEFAULT"))
-        client = oci.generative_ai_inference.GenerativeAiInferenceClient(config)
-    elif os.getenv("OCI_RESOURCE_PRINCIPAL"):
-        signer = oci.auth.signers.get_resource_principals_signer()
-        client = oci.generative_ai_inference.GenerativeAiInferenceClient(config={}, signer=signer)
-    else:
-        return None
-
-    # Cohere-style chat; adjust if using Llama serving mode
-    from oci.generative_ai_inference import models as gai_models
-
-    content = gai_models.TextContent(text=prompt)
-    message = gai_models.Message(role="USER", content=[content])
-    chat_request = gai_models.GenericChatRequest(
-        messages=[message],
-        max_tokens=40,
-        temperature=0.3,
-    )
-    details = gai_models.ChatDetails(
-        compartment_id=compartment,
-        serving_mode=gai_models.OnDemandServingMode(model_id=model_id),
-        chat_request=chat_request,
-    )
-    resp = client.chat(details)
-    # Best-effort extract
     try:
-        choices = resp.data.chat_response.choices
-        text = choices[0].message.content[0].text
+        if os.getenv("OCI_RESOURCE_PRINCIPAL"):
+            signer = oci.auth.signers.get_resource_principals_signer()
+            client = oci.generative_ai_inference.GenerativeAiInferenceClient(config={}, signer=signer)
+        else:
+            # Same default as oci_storage.py: ~/.oci/config unless OCI_CONFIG_FILE is set
+            config_file = os.getenv("OCI_CONFIG_FILE") or os.path.expanduser("~/.oci/config")
+            config = oci.config.from_file(config_file, os.getenv("OCI_CONFIG_PROFILE", "DEFAULT"))
+            client = oci.generative_ai_inference.GenerativeAiInferenceClient(config)
+
+        from oci.generative_ai_inference import models as gai_models
+
+        # Cohere models need CohereChatRequest; Meta/Llama-style models use GenericChatRequest.
+        provider = os.getenv("OCI_GENAI_PROVIDER", "cohere").lower()
+        if provider == "cohere" or model_id.startswith("cohere."):
+            chat_request = gai_models.CohereChatRequest(
+                message=prompt,
+                max_tokens=40,
+                temperature=0.3,
+            )
+        else:
+            content = gai_models.TextContent(text=prompt)
+            message = gai_models.Message(role="USER", content=[content])
+            chat_request = gai_models.GenericChatRequest(
+                messages=[message],
+                max_tokens=40,
+                temperature=0.3,
+            )
+
+        details = gai_models.ChatDetails(
+            compartment_id=compartment,
+            serving_mode=gai_models.OnDemandServingMode(model_id=model_id),
+            chat_request=chat_request,
+        )
+        resp = client.chat(details)
+        chat_response = resp.data.chat_response
+        if getattr(chat_response, "text", None):
+            text = chat_response.text  # Cohere response shape
+        else:
+            text = chat_response.choices[0].message.content[0].text  # Generic shape
         return text.strip().strip('"')
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - fall back to local cues instead of a 500
+        print(f"[oci_genai] falling back to local cue: {exc}")
         return None
