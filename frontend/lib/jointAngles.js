@@ -97,6 +97,17 @@ export function extractJointMetrics(landmarks) {
   const shoulderDelta =
     visibilityOk(ls) && visibilityOk(rs) ? Math.abs(ls.y - rs.y) * 100 : null;
 
+  let ankleYDelta = null;
+  let footSpread = null;
+  let shoulderHipY = null;
+  if (visibilityOk(la) && visibilityOk(ra)) {
+    ankleYDelta = Math.abs(la.y - ra.y);
+    footSpread = Math.abs(la.x - ra.x);
+  }
+  if (shoulderMid && hipMid) {
+    shoulderHipY = Math.abs(shoulderMid.y - hipMid.y);
+  }
+
   return {
     leftKnee,
     rightKnee,
@@ -107,6 +118,9 @@ export function extractJointMetrics(landmarks) {
     rightKneeCave,
     shoulderDelta,
     hipY: hipMid ? hipMid.y : null,
+    ankleYDelta,
+    footSpread,
+    shoulderHipY,
     kneeAsymmetry:
       leftKnee != null && rightKnee != null ? Math.abs(leftKnee - rightKnee) : null,
     hipAsymmetry:

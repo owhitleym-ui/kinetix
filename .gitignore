@@ -10,6 +10,8 @@ venv/
 .env.local
 backend/data/
 backend/models/*.joblib
+# Keep trained browser weights; ignore large pickle
+Data/*.pickle
 .DS_Store
 *.log
 .vercel/
