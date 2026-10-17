@@ -5,7 +5,9 @@
   "description": "Live, on-device movement feedback for physical therapy exercises (MediaPipe Pose + per-exercise mistake classifiers).",
   "type": "module",
   "scripts": {
-    "serve": "python3 -m http.server 8801 --bind 127.0.0.1 --directory web",
+    "serve": "node scripts/serve-web.mjs",
+    "serve:api": "python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000 --app-dir backend",
+    "dev": "node scripts/serve-web.mjs",
     "test": "node tests/parity_test.mjs && node tests/sim_test.mjs",
     "tune": "node tests/tune.mjs",
     "mobility": "node tests/mobility_test.mjs"

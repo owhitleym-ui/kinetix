@@ -1,0 +1,311 @@
+"""OCI Generative AI chat client with deterministic local fallbacks."""
+from __future__ import annotations
+
+import json
+import os
+import re
+from typing import Any
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_MAX_CUE_WORDS = 10
+
+
+def _configured() -> bool:
+    return bool(os.getenv("OCI_GENAI_COMPARTMENT_ID") or os.getenv("OCI_GENAI_ENDPOINT"))
+
+
+def _truncate_words(text: str, n: int = _MAX_CUE_WORDS) -> str:
+    words = re.findall(r"\S+", (text or "").strip())
+    if not words:
+        return ""
+    out = " ".join(words[:n])
+    return out.rstrip(".,;:") + ("." if not out.endswith((".", "!", "?")) else "")
+
+
+def local_cue(payload: dict[str, Any]) -> str:
+    if payload.get("good"):
+        return "Good form. Keep going."
+    short = (payload.get("short") or payload.get("label") or "Fix your form").strip()
+    return _truncate_words(short)
+
+
+def _has_phrase(msg: str, *phrases: str) -> bool:
+    return any(p in msg for p in phrases)
+
+
+def _has_word(msg: str, *words: str) -> bool:
+    return any(re.search(rf"\b{re.escape(w)}\b", msg) for w in words)
+
+
+def local_chat(message: str, session_context: dict[str, Any] | None) -> str:
+    ctx = session_context or {}
+    msg = (message or "").lower().strip()
+    reps_done = int(ctx.get("reps_done") or 0)
+    reps_target = int(ctx.get("reps_target") or 0)
+    reps_left = max(0, reps_target - reps_done)
+    last = ctx.get("last_rep") or {}
+    tallies = ctx.get("tallies") or {}
+
+    # Last-rep / mistake questions first (before any "left" matching).
+    if _has_phrase(
+        msg,
+        "last rep",
+        "what was wrong",
+        "what went wrong",
+        "what happened",
+        "why was",
+        "my form",
+        "fix tip",
+        "fix cue",
+        "fix check",
+    ) or _has_word(msg, "wrong", "mistake", "mistakes", "issue", "problem", "fix"):
+        if not last:
+            return "No counted rep yet — finish one, then ask again."
+        if last.get("good"):
+            return "Your last rep looked good. Keep that depth and control."
+        label = last.get("title") or last.get("label") or "a form issue"
+        tip = last.get("cue") or last.get("short") or ""
+        if tip:
+            return f"Last rep: {label}. {tip}"
+        return f"Last rep had: {label}."
+
+    # Progress / score
+    if _has_phrase(msg, "how am i", "how am i doing", "how am i doin") or _has_word(
+        msg, "summary", "progress", "score", "tally", "stats"
+    ):
+        good = tallies.get("good", 0)
+        bad = tallies.get("bad", 0)
+        skip = tallies.get("skip", 0)
+        return f"{good} good, {bad} to fix" + (f", {skip} not counted." if skip else ".")
+
+    # Reps remaining — specific phrases only (never bare "left", which matched too much).
+    if (
+        _has_phrase(msg, "how many left", "how many more", "reps left", "reps remaining", "how many reps")
+        or (_has_word(msg, "remaining", "left") and _has_word(msg, "rep", "reps"))
+        or (_has_phrase(msg, "how many") and _has_word(msg, "rep", "reps", "more"))
+    ):
+        if reps_target:
+            return f"You have {reps_left} of {reps_target} left."
+        return f"You've done {reps_done} reps so far."
+
+    # Default: useful from context, not always "reps left".
+    if last and not last.get("good"):
+        tip = last.get("cue") or last.get("short") or last.get("title") or "focus on form"
+        return f"Focus on: {tip}"
+    if last and last.get("good"):
+        if reps_target:
+            return f"Nice form on that last rep. {reps_left} left."
+        return "Nice form on that last rep. Keep going."
+    if reps_target and reps_done:
+        return f"{reps_done} done, {reps_left} left. Ask about your last mistake anytime."
+    return "Start a few reps, then ask about your last rep or how many are left."
+
+
+def local_summary(session_context: dict[str, Any] | None) -> dict[str, Any]:
+    ctx = session_context or {}
+    exercise = ctx.get("exercise_title") or ctx.get("exercise") or "your exercise"
+    tallies = ctx.get("tallies") or {}
+    good = int(tallies.get("good") or 0)
+    bad = int(tallies.get("bad") or 0)
+    skip = int(tallies.get("skip") or 0)
+    reps = ctx.get("reps") or []
+    mistake_counts: dict[str, int] = {}
+    for r in reps:
+        if r.get("good"):
+            continue
+        key = r.get("title") or r.get("label") or "Form issue"
+        mistake_counts[key] = mistake_counts.get(key, 0) + 1
+    top = sorted(mistake_counts.items(), key=lambda x: -x[1])[:3]
+
+    summary = (
+        f"You completed {good + bad} counted reps of {exercise} "
+        f"({good} good, {bad} to fix"
+        + (f", {skip} not counted" if skip else "")
+        + ")."
+    )
+    if top:
+        names = ", ".join(n for n, _ in top)
+        summary += f" Most common issues: {names}."
+
+    tips: list[str] = []
+    for title, _ in top:
+        cue = next((r.get("cue") for r in reversed(reps) if (r.get("title") or r.get("label")) == title and r.get("cue")), None)
+        tips.append(cue or f"Watch for: {title}.")
+    if not tips:
+        tips = ["Keep the same depth and tempo.", "Stay facing the camera.", "Reset fully between reps."]
+    return {"summary": summary, "tips": tips[:5]}
+
+
+def _chat_oci(system: str, user: str) -> str | None:
+    if not _configured():
+        return None
+    try:
+        import oci
+        from oci.generative_ai_inference import GenerativeAiInferenceClient
+        from oci.generative_ai_inference.models import (
+            ChatDetails,
+            CohereChatRequest,
+            GenericChatRequest,
+            Message,
+            OnDemandServingMode,
+            TextContent,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[oci_genai] SDK unavailable: {e}")
+        return None
+
+    compartment = os.getenv("OCI_GENAI_COMPARTMENT_ID", "")
+    model_id = os.getenv("OCI_GENAI_MODEL_ID", "")
+    endpoint = os.getenv("OCI_GENAI_ENDPOINT")
+    region = os.getenv("OCI_REGION", "us-chicago-1")
+    config_file = os.getenv("OCI_CONFIG_FILE") or oci.config.DEFAULT_LOCATION
+    profile = os.getenv("OCI_CONFIG_PROFILE", "DEFAULT")
+
+    try:
+        config = oci.config.from_file(config_file, profile)
+        if region:
+            config["region"] = region
+        client_kwargs: dict[str, Any] = {"config": config}
+        if endpoint:
+            client_kwargs["service_endpoint"] = endpoint
+        elif region:
+            client_kwargs["service_endpoint"] = f"https://inference.generativeai.{region}.oci.oraclecloud.com"
+        client = GenerativeAiInferenceClient(**client_kwargs)
+
+        serving = OnDemandServingMode(model_id=model_id) if model_id else None
+        # Prefer GenericChatRequest (Llama / OpenAI-compatible); fall back to Cohere shape.
+        try:
+            content = TextContent(text=f"{system}\n\n{user}")
+            message = Message(role="USER", content=[content])
+            chat_request = GenericChatRequest(messages=[message], max_tokens=256, temperature=0.2)
+            details = ChatDetails(compartment_id=compartment, serving_mode=serving, chat_request=chat_request)
+            resp = client.chat(details)
+            data = resp.data
+            # Generic response shapes vary by model; dig for text.
+            text = _extract_text(data)
+            if text:
+                return text.strip()
+        except Exception as e:  # noqa: BLE001
+            print(f"[oci_genai] GenericChatRequest failed, trying Cohere: {e}")
+
+        chat_request = CohereChatRequest(
+            message=user,
+            preamble_override=system,
+            max_tokens=256,
+            temperature=0.2,
+            is_stream=False,
+        )
+        details = ChatDetails(compartment_id=compartment, serving_mode=serving, chat_request=chat_request)
+        resp = client.chat(details)
+        text = getattr(resp.data, "chat_response", None)
+        if text is not None and hasattr(text, "text"):
+            return (text.text or "").strip()
+        return _extract_text(resp.data)
+    except Exception as e:  # noqa: BLE001
+        print(f"[oci_genai] chat failed: {e}")
+        return None
+
+
+def _extract_text(data: Any) -> str | None:
+    if data is None:
+        return None
+    if isinstance(data, str):
+        return data
+    for attr in ("text", "content"):
+        v = getattr(data, attr, None)
+        if isinstance(v, str) and v.strip():
+            return v
+    chat = getattr(data, "chat_response", None) or getattr(data, "chatResponse", None)
+    if chat is not None:
+        t = _extract_text(chat)
+        if t:
+            return t
+    choices = getattr(data, "choices", None)
+    if choices:
+        first = choices[0]
+        msg = getattr(first, "message", None)
+        if msg is not None:
+            content = getattr(msg, "content", None)
+            if isinstance(content, list) and content:
+                part = content[0]
+                text = getattr(part, "text", None)
+                if text:
+                    return text
+            if isinstance(content, str):
+                return content
+    return None
+
+
+def generate_cue(payload: dict[str, Any]) -> tuple[str, str]:
+    """Return (text, source) where source is 'oci' or 'local'."""
+    fallback = local_cue(payload)
+    system = (
+        "You are a concise physical therapy coach. Reply with ONE short spoken cue only. "
+        f"Hard limit: {_MAX_CUE_WORDS} words. No markdown, no quotes, no numbering."
+    )
+    user = (
+        f"Exercise: {payload.get('exercise')}\n"
+        f"Rep: {payload.get('rep')} of {payload.get('reps_target')}\n"
+        f"Good form: {payload.get('good')}\n"
+        f"Label: {payload.get('label')}\n"
+        f"Short: {payload.get('short')}\n"
+        f"Fix cue: {payload.get('cue')}\n"
+        "Write the spoken cue now."
+    )
+    text = _chat_oci(system, user)
+    if text:
+        return _truncate_words(text), "oci"
+    return fallback, "local"
+
+
+def generate_chat(
+    message: str,
+    history: list[dict[str, str]] | None,
+    session_context: dict[str, Any] | None,
+) -> tuple[str, str]:
+    fallback = local_chat(message, session_context)
+    ctx_json = json.dumps(session_context or {}, ensure_ascii=False)[:4000]
+    hist = history or []
+    hist_lines = "\n".join(f"{h.get('role', 'user')}: {h.get('content', '')}" for h in hist[-6:])
+    system = (
+        "You are Form Check's PT coach. Answer ONLY using the session_context JSON. "
+        "If the answer is not in the context, say you don't have that yet. "
+        "Be brief (1-3 short sentences). Do not invent joint angles or diagnoses."
+    )
+    user = f"session_context:\n{ctx_json}\n\nrecent_chat:\n{hist_lines}\n\nuser: {message}"
+    text = _chat_oci(system, user)
+    if text:
+        return text.strip(), "oci"
+    return fallback, "local"
+
+
+def generate_summary(session_context: dict[str, Any] | None) -> tuple[dict[str, Any], str]:
+    fallback = local_summary(session_context)
+    ctx_json = json.dumps(session_context or {}, ensure_ascii=False)[:6000]
+    system = (
+        "You are a physical therapy coach writing an end-of-set summary. "
+        "Return strict JSON only with keys: summary (string, 1-3 sentences), tips (array of 3-5 short strings). "
+        "Use only the provided session data. No markdown."
+    )
+    user = f"session_context:\n{ctx_json}"
+    text = _chat_oci(system, user)
+    if text:
+        try:
+            # Strip optional fences
+            cleaned = text.strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                cleaned = re.sub(r"\s*```$", "", cleaned)
+            data = json.loads(cleaned)
+            summary = str(data.get("summary") or fallback["summary"])
+            tips = data.get("tips") or fallback["tips"]
+            if not isinstance(tips, list):
+                tips = fallback["tips"]
+            tips = [str(t).strip() for t in tips if str(t).strip()][:5]
+            return {"summary": summary, "tips": tips or fallback["tips"]}, "oci"
+        except Exception as e:  # noqa: BLE001
+            print(f"[oci_genai] summary JSON parse failed: {e}")
+    return fallback, "local"
