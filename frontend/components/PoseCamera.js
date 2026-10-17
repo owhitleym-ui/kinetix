@@ -17,7 +17,6 @@ import { speakCue } from "@/lib/voice";
 import { generateCue, scoreRep } from "@/lib/ociClient";
 import {
   createExerciseClassifier,
-  formatDetectedBadge,
   loadExerciseWeights,
   updateExerciseClassifier,
 } from "@/lib/exerciseClassifier";
@@ -135,13 +134,16 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
         score,
       });
 
-      // Speak EC3D model cue when rep scored incorrect
       if (score?.quality === "incorrect" && score.error_type) {
         const text = getCueText(score.error_type, languageRef.current);
         if (text) {
-          setCue({ text, errorType: score.error_type });
+          setCue({ text, errorType: score.error_type, tone: "bad" });
           speakCue(text, languageRef.current);
         }
+      } else if (score?.quality === "correct") {
+        const text = getCueText("well_done", languageRef.current);
+        setCue({ text, errorType: null, tone: "good" });
+        speakCue(text, languageRef.current);
       }
     }
   };
@@ -169,7 +171,7 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
       if (modeRef.current !== "coaching") return;
       setCue((prev) => {
         if (prev?.errorType && prev.errorType !== errorType) return prev;
-        return { text: res.cue, errorType, source: res.source };
+        return { text: res.cue, errorType, source: res.source, tone: "bad" };
       });
     });
   };
@@ -232,9 +234,18 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
     if (correction) {
       const text = getCueText(correction.errorType, languageRef.current);
-      setCue({ text, errorType: correction.errorType, source: "local" });
+      setCue({ text, errorType: correction.errorType, source: "local", tone: "bad" });
       speakCue(text, languageRef.current);
       requestGenAiCue(correction);
+    } else if (
+      modeRef.current === "coaching" &&
+      canCoachSquat &&
+      tracker.phase !== "standing"
+    ) {
+      // Moving with no flagged error → positive form check
+      const text = getCueText("well_done", languageRef.current);
+      setCue({ text, errorType: null, tone: "good", source: "local" });
+      speakCue(text, languageRef.current);
     }
 
     if (tracker.lastCompletedRep) {
@@ -348,32 +359,30 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
 
         <div className={styles.overlayTop}>
           <span className={styles.badge}>{modeLabel(mode, language)}</span>
-          <span
-            className={`${styles.badgeDetect} ${
-              detectedExercise.label === "unknown" ? styles.badgeDetectIdle : ""
-            }`}
-            role="status"
-            aria-live="polite"
-            title={
-              detectedExercise.confidence
-                ? `${(detectedExercise.confidence * 100).toFixed(0)}% confidence`
-                : undefined
-            }
-          >
-            {formatDetectedBadge(detectedExercise.label, language)}
-          </span>
           <span className={styles.badgeMuted}>{phase}</span>
         </div>
+      </div>
+
+      {/* Outside camera: big detected exercise name */}
+      <div className={styles.belowCamera} aria-live="polite">
+        {detectedExercise.label !== "unknown" ? (
+          <h2 className={styles.exerciseHero}>{detectedExercise.displayName}</h2>
+        ) : (
+          <h2 className={styles.exerciseHeroIdle}>
+            {language === "es" ? "Esperando ejercicio…" : "Waiting for exercise…"}
+          </h2>
+        )}
 
         <CorrectionCue
           text={cue?.text}
           errorType={cue?.errorType}
           language={language}
-          visible={!!cue?.text && mode === "coaching"}
+          tone={cue?.tone === "good" ? "good" : "bad"}
+          visible={!!cue?.text && (mode === "coaching" || mode === "done")}
         />
 
         {lastScore && (
-          <div className={styles.scoreDock}>
+          <div className={styles.scoreDockOutside}>
             <RepScoreCard score={lastScore} repNumber={lastScore.repNumber} />
           </div>
         )}
@@ -384,12 +393,6 @@ export default function PoseCamera({ language = "en", patientId = "demo-patient"
           <Stat
             label={language === "es" ? "Calibración" : "Calibration"}
             value={`${calibReps}/${CALIBRATION_REPS}`}
-          />
-        )}
-        {(mode === "calibrate" || mode === "coaching") && (
-          <Stat
-            label={language === "es" ? "Ejercicio" : "Exercise"}
-            value={detectedExercise.displayName}
           />
         )}
         {mode === "coaching" && (

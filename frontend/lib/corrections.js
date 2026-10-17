@@ -18,6 +18,7 @@ const Z_THRESHOLD = 1.5;
 
 export const CUES = {
   en: {
+    well_done: "Well done",
     back_round: "Lower your back",
     knee_cave: "Push your knees out",
     shallow: "Go deeper",
@@ -32,6 +33,7 @@ export const CUES = {
     hunch_back: "Open your chest, lengthen your spine",
   },
   es: {
+    well_done: "Bien hecho",
     back_round: "Baja la espalda",
     knee_cave: "Empuja las rodillas hacia afuera",
     shallow: "Baja más",
