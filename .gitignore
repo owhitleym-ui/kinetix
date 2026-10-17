@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+dist/
+*.pyc
+__pycache__/
+.venv/
+venv/
+.env
+.env.local
+backend/data/
+backend/models/*.joblib
+.DS_Store
+*.log
+.vercel/
