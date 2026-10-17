@@ -3,7 +3,7 @@
 // per-rep error classifier -> verdict + spoken cue.
 import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
 import { Calibrator, classify, decide, makeSegmenter, repFeatures } from "./features.js";
-import { RULES, SetupGate, framing, validateRep } from "./session.js";
+import { MOBILITY, SetupGate, framing, rulesFor, validateRep } from "./session.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "models/pose_landmarker_full.task";
@@ -13,6 +13,11 @@ const HOWTO = {
   arm_abduction: "<b>Shoulder Abduction.</b> Stand facing the camera with your <b>whole body, head to feet</b>, in the frame and your right arm by your side. Hold still until it says <b>Go</b>, then raise your <b>right</b> arm out to the side and bring it all the way back down for each rep.",
   shoulder_extension: "<b>Shoulder Extension.</b> Stand facing the camera with your <b>whole body, head to feet</b>, in the frame and your right arm by your side. After <b>Go</b>, each time you hear <b>“Back”</b>, move your <b>right</b> arm straight back behind you and return before the next cue.",
 };
+const MOBILITY_NOTES = {
+  slight: "<b>Slight mobility limits.</b> A slightly smaller range of motion counts, and small range issues are flagged less. Move only as far as is comfortable.",
+  moderate: "<b>Moderate mobility limits.</b> A smaller range of motion counts, and only clear form problems are flagged. Move only as far as is comfortable.",
+};
+const mobilityNote = () => (MOBILITY_NOTES[mobility] ? `<br><br>${MOBILITY_NOTES[mobility]}` : "");
 const CALIBRATE = "You get feedback on every rep. After your first few reps it also adapts to your body, which makes it more precise.";
 
 // Body-only skeleton (no face points).
@@ -44,6 +49,10 @@ const nice = (code) => LABELS[code] || code.replace(/^ERR_/, "").toLowerCase().r
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 let currentEx = EXERCISES[0], source = "webcam", setSizeVal = 10;
+let mobility = "standard";
+try { if (MOBILITY[localStorage.getItem("formcheck.mobility")]) mobility = localStorage.getItem("formcheck.mobility"); } catch (e) { /* storage blocked */ }
+const rules = () => rulesFor(currentEx, mobility);
+const cueFor = (label) => MOBILITY[mobility].cues[label] || model.cues[label];
 const setSize = () => setSizeVal;
 
 let landmarker, model, seg, cal, gate, stream, running = false, lastTime = -1;
@@ -66,8 +75,8 @@ async function loadModel(ex) {
   model = await (await fetch(`models/rehab26_${ex}.json`)).json();
   seg = makeSegmenter(model.segmenter);
   cal = new Calibrator(model.calibration);
-  gate = new SetupGate(RULES[ex]);
-  $("#howto").innerHTML = `${HOWTO[ex]}<br><br>${CALIBRATE}`;
+  gate = new SetupGate(rulesFor(ex, mobility));
+  $("#howto").innerHTML = `${HOWTO[ex]}<br><br>${CALIBRATE}${mobilityNote()}`;
   $("#expected").innerHTML = `<option value="">Not testing</option>` +
     model.classes.map((c) => `<option value="${c}">${esc(nice(c))}</option>`).join("");
   const m = model.metrics;
@@ -183,7 +192,7 @@ function onPose(res, t) {
 
 // A detected movement: count and assess it only if it is a complete, deliberate rep.
 function onMovement(frames) {
-  const v = validateRep(frames, seg, RULES[model.exercise]);
+  const v = validateRep(frames, seg, rules());
   if (!v.ok) {
     showChip(`Not counted · ${v.short}`, "muted", 3500);
     logRow("skip", "–", "Not counted", v.short, "");
@@ -196,7 +205,8 @@ function onMovement(frames) {
   // Feedback on every rep: the early model (change from the rep's own start) until we know this user's normal,
   // then the calibrated model (compared with the user's own previous reps). Both run automatically.
   const x = repFeatures(frames, model.feature_set);
-  const out = cal.ready ? decide(model, classify(model, frames, cal.center(), x)) : decide(model.early, classify(model.early, frames));
+  const opts = MOBILITY[mobility];
+  const out = cal.ready ? decide(model, classify(model, frames, cal.center(), x), opts) : decide(model.early, classify(model.early, frames), opts);
   learn(x, v.amp);
   const good = out.label === "CORRECT", done = repCount === setSize();
   showCount(done ? "set complete ✓" : "");
@@ -216,11 +226,11 @@ function onMovement(frames) {
   const secs = ((frames[frames.length - 1].t - frames[0].t) / 1000).toFixed(1);
   $("#latest").innerHTML = `<div class="rep-meta">Rep ${repCount} · ${secs} s</div>
     <div class="verdict" style="color:var(${good ? "--good-text" : "--bad-text"})">${esc(nice(out.label))}</div>
-    <div class="cue">${good ? "Nice work. Keep it up." : esc(model.cues[out.label])}</div>${tag}
+    <div class="cue">${good ? "Nice work. Keep it up." : esc(cueFor(out.label))}</div>${tag}
     <div class="rep-meta" style="margin:14px 0 8px">What the model saw</div><div class="bars">${bars}</div>`;
   logRow(good ? "good" : "bad", repCount, nice(out.label), good ? "" : model.short[out.label], tag || `${secs} s`);
   // spoken feedback every rep: the count + "good", or the mistake with how to fix it
-  const how = model.segmenter.mode === "tempo" ? "" : ` ${model.cues[out.label]}`;   // tempo: keep it short before the next cue
+  const how = model.segmenter.mode === "tempo" ? "" : ` ${cueFor(out.label)}`;   // tempo: keep it short before the next cue
   speak(good ? `${repCount}. Good.${done ? " Set complete." : ""}` : `${repCount}. ${model.short[out.label]}.${how}${done ? " Set complete." : ""}`);
 }
 
@@ -425,6 +435,17 @@ document.addEventListener("keydown", (e) => {
   if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.target.closest("input, select, textarea")) toggleFullscreen();
 });
 
+function setMobility(m) {
+  if (m === "limited") m = "moderate";   // older saved names
+  if (m === "small") m = "slight";
+  mobility = MOBILITY[m] ? m : "standard";
+  try { localStorage.setItem("formcheck.mobility", mobility); } catch (e) { /* storage blocked */ }
+  pressed($("#mobilitySeg"), $(`#mobilitySeg [data-m="${mobility}"]`));
+  if (gate) gate.rules = rulesFor(currentEx, mobility);   // applies right away, even mid-session
+  if (model) $("#howto").innerHTML = `${HOWTO[currentEx]}<br><br>${CALIBRATE}${mobilityNote()}`;
+}
+$("#mobilitySeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMobility(b.dataset.m); });
+
 $("#start").onclick = start;
 $("#stop").onclick = () => { stop(); $("#status").textContent = "Stopped."; };
 $("#resetTally").onclick = () => { tally = { n: 0, exact: 0, binary: 0 }; $("#tally").textContent = ""; };
@@ -433,6 +454,7 @@ $("#resetTally").onclick = () => { tally = { n: 0, exact: 0, binary: 0 }; $("#ta
 const params = new URLSearchParams(location.search);
 const ex0 = EXERCISES.includes(params.get("ex")) ? params.get("ex") : EXERCISES[0];
 await loadModel(ex0);
+setMobility(params.get("mobility") || mobility);
 showCount("");
 if (params.get("video")) { setSource("file"); $("#fileName").textContent = params.get("video").split("/").pop(); }
 // The model detects the mistake type by itself. The "I'm doing…" selector is only a testing aid (?test=1).

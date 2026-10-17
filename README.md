@@ -16,6 +16,10 @@ after every rep. Everything runs in the browser tab: the video never leaves your
 - **Only real reps count**: a movement must be complete and deliberate (full range, back to start, steady, in frame).
   Anything else is logged as "Not counted" with the reason.
 - **Feedback on every rep**: verdict, how to fix it, spoken cue, joint-angle overlay, rep counter and a rep log.
+- **Mobility limits: None / Slight / Moderate**: relaxes what counts as a good rep for people who can't do the full
+  movement. Slight: about 15% less range needed to count; Moderate: about 25% less. Range-of-motion feedback gets
+  gentler and needs more evidence; real form problems are still flagged. Good reps called good: 70-75% (None),
+  75-77% (Slight), 79-81% (Moderate); mistakes still flagged: 93-94%, 93%, 91-92%. Remembered per browser.
 - **Full screen** with large overlays (button on the video, or press `F`).
 
 ## Quick start
@@ -55,7 +59,7 @@ web/                    the app (static files, served as-is)
   index.html            layout and styles
   app.js                camera loop, drawing, feedback, voice, rep log, full screen
   features.js           joint-angle features, rep detection, calibration, classifier (shared with the tests)
-  session.js            setup gate and rep validation rules
+  session.js            setup gate, rep validation rules, mobility setting
   models/               pose_landmarker_full.task (MediaPipe) + rehab26_<exercise>.json (trained weights)
 training/
   train_rehab26.py      train + evaluate (leave-one-person-out) + export models to web/models/
@@ -67,6 +71,7 @@ dataset/
 tests/
   parity_test.mjs       browser features == training features
   sim_test.mjs          replays held-out people frame by frame through the live pipeline
+  mobility_test.mjs     None / Slight / Moderate mobility limits on the same replays
   tune.mjs, offsets.mjs rep-detection tuning tools
   browser_test.py, load_check.py, fs_check.py   headless-Chrome checks of the real page
 scripts/get_data.sh     downloads the full skeleton data into data/ (not committed, ~690 MB)
@@ -95,6 +100,7 @@ python training/export_features.py     # optional: refresh dataset/rehab26_featu
 
 ```bash
 npm test                               # needs tests/data/ from a training run on the full data
+npm run mobility                       # None vs Slight vs Moderate mobility limits
 npm run serve &                        # then, with Google Chrome installed:
 python tests/load_check.py             # page loads without errors
 python tests/browser_test.py testvideos/<clip>.mp4 arm_abduction CORRECT   # clip in web/testvideos/
