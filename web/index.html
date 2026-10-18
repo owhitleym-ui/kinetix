@@ -35,6 +35,16 @@
   .privacy { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted);
              background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; }
   .privacy i { width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+  .header-right { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .account-nav { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .nav-link {
+    font-size: 13.5px; font-weight: 600; color: var(--primary);
+    background: var(--primary-soft); border: 1px solid rgba(37,99,235,.25);
+    border-radius: 999px; padding: 6px 12px; text-decoration: none; cursor: pointer;
+  }
+  .nav-link:hover { background: #dbeafe; text-decoration: none; }
+  .nav-btn { font: inherit; }
+  .nav-user { font-size: 13px; color: var(--muted); font-weight: 500; }
 
   .label { font-size: 13px; font-weight: 600; color: var(--muted); margin: 24px 0 10px; }
 
@@ -495,7 +505,10 @@
       <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.2"/><path d="M12 8v6M12 14l-3 6M12 14l3 6M7 10l5-1 5 1"/></svg></div>
       <div><h1>Form Check</h1><div class="tag">Live feedback for physical therapy exercises</div></div>
     </div>
-    <span class="privacy"><i></i>Video stays on device · coach uses form events only</span>
+    <div class="header-right">
+      <div class="account-nav" id="accountNav"></div>
+      <span class="privacy"><i></i>Video stays on device · coach uses form events only</span>
+    </div>
   </header>
 
   <div class="label">Choose an exercise</div>
@@ -603,6 +616,10 @@
   <footer id="modelInfo"></footer>
 </main>
 <script src="config.js"></script>
+<script type="module">
+  import { renderAccountNav } from "./auth.js";
+  renderAccountNav();
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

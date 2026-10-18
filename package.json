@@ -7,6 +7,8 @@
   "scripts": {
     "serve": "node scripts/serve-web.mjs",
     "serve:api": "python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000 --app-dir backend",
+    "serve:atp": "npm --prefix api start",
+    "migrate:atp": "npm --prefix api run migrate",
     "dev": "node scripts/serve-web.mjs",
     "test": "node tests/parity_test.mjs && node tests/sim_test.mjs",
     "tune": "node tests/tune.mjs",

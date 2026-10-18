@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create account · Form Check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%232563eb%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%223.5%22 fill=%22white%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="auth.css">
+</head>
+<body>
+  <main class="auth-page">
+    <a class="auth-brand" href="index.html">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.5"/></svg></span>
+      Form Check
+    </a>
+    <form class="auth-card" id="registerForm">
+      <h1>Create account</h1>
+      <p class="auth-sub">Choose whether you are a patient or a physical therapist.</p>
+
+      <div class="role-seg" role="group" aria-label="Account type">
+        <button type="button" class="role-btn" data-role="patient" aria-pressed="true">Patient</button>
+        <button type="button" class="role-btn" data-role="pt" aria-pressed="false">Physical therapist</button>
+      </div>
+      <input type="hidden" name="role" id="role" value="patient">
+
+      <label class="field">
+        <span>Display name</span>
+        <input type="text" name="displayName" autocomplete="name" required maxlength="200">
+      </label>
+      <label class="field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="username" required>
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" name="password" autocomplete="new-password" required minlength="6">
+      </label>
+      <p class="auth-error" id="error" hidden></p>
+      <button type="submit" class="btn primary" id="submit">Create account</button>
+      <p class="auth-foot">Already have an account? <a href="login.html">Log in</a></p>
+    </form>
+  </main>
+<script src="config.js"></script>
+<script type="module">
+  import { register, isLoggedIn } from "./auth.js";
+  if (isLoggedIn()) location.replace("index.html");
+
+  const form = document.getElementById("registerForm");
+  const roleInput = document.getElementById("role");
+  const error = document.getElementById("error");
+  const submit = document.getElementById("submit");
+
+  document.querySelectorAll(".role-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".role-btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
+      btn.setAttribute("aria-pressed", "true");
+      roleInput.value = btn.dataset.role;
+    });
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    error.hidden = true;
+    submit.disabled = true;
+    const fd = new FormData(form);
+    try {
+      await register({
+        email: String(fd.get("email")),
+        password: String(fd.get("password")),
+        displayName: String(fd.get("displayName")),
+        role: String(fd.get("role")),
+      });
+      location.href = "index.html";
+    } catch (err) {
+      error.textContent = err.message || "Registration failed";
+      error.hidden = false;
+      submit.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

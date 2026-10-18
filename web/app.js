@@ -8,6 +8,7 @@ import * as sessionMemory from "./sessionMemory.js";
 import { fetchChat, fetchSummary } from "./coach.js";
 import { ensureMicPermission, listen as listenSpeech, supported as speechSupported } from "./speechInput.js";
 import { speakNatural, stopNatural, ttsHealth, FEMALE_VOICE } from "./naturalSpeak.js";
+import { startAtpSession, logAtpRep, endAtpSession } from "./atpClient.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "models/pose_landmarker_full.task";
@@ -266,6 +267,14 @@ function onMovement(frames) {
     logRow("skip", "–", "Not counted", v.short, "");
     sessionMemory.pushSkip({ reason: v.reason, short: v.short });
     speak(`Not counted. ${v.reason}`);
+    logAtpRep({
+      repNumber: repCount + 1,
+      counted: false,
+      verdict: "NOT_COUNTED",
+      mistake: v.reason,
+      cue: v.short,
+      exercise: model.exercise,
+    });
     return;
   }
   repCount++;
@@ -312,6 +321,15 @@ function onMovement(frames) {
     good,
     duration_s: Number(secs),
     top_probs: topProbs,
+  });
+
+  logAtpRep({
+    repNumber: repCount,
+    counted: true,
+    verdict: good ? "CORRECT" : out.label,
+    mistake: good ? null : out.label,
+    cue: fixCue,
+    exercise: model.exercise,
   });
 
   // Spoken coaching: natural sentences (not raw chip text). Queued so it won't overlap.
@@ -393,6 +411,7 @@ async function showSetSummary() {
   panel.hidden = false;
   $("#setSummaryBody").textContent = "Writing your summary…";
   $("#setSummaryTips").innerHTML = "";
+  endAtpSession();
   const result = await fetchSummary(sessionMemory.context());
   $("#setSummaryBody").textContent = result.summary;
   $("#setSummaryTips").innerHTML = (result.tips || []).map((t) => `<li>${esc(t)}</li>`).join("");
@@ -660,6 +679,7 @@ async function start() {
     $("#latest").innerHTML = `<div class="muted">${CALIBRATE}</div>`;
     showCount("get into position"); resetLog(); resetCoachUi();
     sessionMemory.start({ exercise: model.exercise, target: setSize() });
+    await startAtpSession(model.exercise);
     lastSetupSpoken = ""; lastSetupAt = 0;
     $("#idle").hidden = true; $("#counter").hidden = false; $("#stage").classList.add("live");
     if (source === "webcam") {
@@ -685,6 +705,7 @@ function stop() {
   stream?.getTracks().forEach((t) => t.stop()); stream = null;
   video.pause();
   $("#start").disabled = false; $("#stop").disabled = true;
+  endAtpSession();
 }
 
 // A short, camera-free preparation sequence before the form check.

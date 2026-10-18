@@ -29,6 +29,13 @@ __pycache__/
 .vscode/
 .idea/
 
+# Node / Next build artifacts
+node_modules/
+.next/
+
+# Local Next leftover (app source lives in web/)
+frontend/
+
 # Node ATP API secrets (never commit wallets / keys)
 api/.env
 api/Wallet_*/
