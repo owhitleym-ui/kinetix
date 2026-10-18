@@ -65,7 +65,7 @@ export async function patientDetailRoute({ user, params }) {
       <button type="button" class="btn btn-secondary" data-edit>Edit plan</button>
       ${o.draft ? `<a class="btn btn-primary" href="#/provider/plan/${encodeURIComponent(o.draft.id)}">Review AI plan</a>` : '<button type="button" class="btn btn-primary" disabled title="No AI draft right now">No AI draft</button>'}
     </div>
-    ${painFlag ? `<div class="alert-banner" role="alert">${ICON.warn}<div class="txt"><b>Pain is above your limit.</b> Reported ${painFlag.pain}/10 in the last 2 sessions (was ${painFlag.was})${painfulEx ? `, mostly during ${esc(exName(painfulEx).toLowerCase())}` : ""}.</div><button type="button" class="link-btn" data-message>Message patient</button></div>` : ""}
+    ${painFlag ? `<div class="alert-banner" role="alert">${ICON.warn}<div class="txt"><b>Pain is above your limit.</b> Reported ${painFlag.pain}/10 in the last 2 sessions (was ${painFlag.was})${painfulEx ? `, mostly during ${esc(exName(painfulEx).toLowerCase())}` : ""}.</div><button type="button" class="link-btn" data-message data-with="${esc(params.id)}">Message patient</button></div>` : ""}
     <div class="bento">
       <section class="card b-pain" aria-labelledby="painH">
         <div class="row-between" style="align-items:flex-start"><div><h2 id="painH">Reported pain</h2><div class="muted" style="font-size:.875rem">0-10 after each session</div></div>
@@ -97,8 +97,6 @@ export async function patientDetailRoute({ user, params }) {
       </section>
     </div>`, { active: "patients", user, title: pu.name });
   root.querySelector("[data-edit]").onclick = () => comingSoon("Manual plan editing");
-  root.querySelector("[data-message]")?.addEventListener("click", () => {
-    go(`#/provider/messages?with=${encodeURIComponent(o.id)}`);
-  });
+  // Message patient: handled by delegated click in chrome.js via data-message + data-with
   root.querySelectorAll("[data-clips]").forEach((b) => b.addEventListener("click", () => comingSoon("Watching clips")));
 }

@@ -56,7 +56,7 @@ export function patientSettingsRoute({ user }) {
         <section id="care" tabindex="-1" class="card" aria-labelledby="careH">
           <h2 id="careH" class="card-title">My care team</h2>
           ${pt ? `<div style="display:flex;align-items:center;gap:12px"><span class="avatar" style="width:48px;height:48px;background:var(--accent-soft);color:var(--accent-ink)">${esc(initials(pt.name))}</span><div><b>${esc(pt.name)}</b><div class="muted" style="font-size:.875rem">${esc(pt.clinic)} · Next visit ${esc(prof?.nextVisit ? niceDate(prof.nextVisit) : "not booked")}</div></div></div>` : '<p class="muted" style="margin:0">Not linked to a physical therapist yet.</p>'}
-          <div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="btn btn-primary" data-msg>Message</button><button type="button" class="btn btn-secondary" data-invite aria-expanded="false">Add invite code</button></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn btn-primary" href="${pt?.id ? `#/patient/messages?with=${encodeURIComponent(pt.id)}` : "#/patient/messages"}">Message</a><button type="button" class="btn btn-secondary" data-invite aria-expanded="false">Add invite code</button></div>
           <form data-inviteform hidden style="display:flex;gap:8px;flex-wrap:wrap"><label class="sr-only" for="inviteCode">Invite code</label><input id="inviteCode" class="input" style="flex:1 1 140px" placeholder="e.g. 4F7-K2Q" autocomplete="off"><button class="btn btn-secondary">Link</button></form>
           <div class="setting-row" style="border-top:1px solid var(--track);padding-top:14px"><div><b>Auto-share sessions with ${esc(ptName)}</b><small>Rep counts, form scores and check-ins. Never video.</small></div>${sw("autoShare", st.autoShare !== false, "Auto-share sessions with my PT")}</div>
           <details><summary style="cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center">Shared sessions (${sessions.length} most recent)</summary>
@@ -105,10 +105,6 @@ export function patientSettingsRoute({ user }) {
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
     root.querySelector("[data-delrec]").onclick = () => toast("No recordings are stored by Kinetix. Video stays on your device.", 4000);
-    root.querySelector("[data-msg]").onclick = () => {
-      if (pt?.id) go(`#/patient/messages?with=${encodeURIComponent(pt.id)}`);
-      else go("#/patient/messages");
-    };
     root.querySelector("[data-invite]").onclick = (e) => { const f = root.querySelector("[data-inviteform]"); f.hidden = !f.hidden; e.currentTarget.setAttribute("aria-expanded", String(!f.hidden)); if (!f.hidden) f.querySelector("input").focus(); };
     root.querySelector("[data-inviteform]").addEventListener("submit", (e) => { e.preventDefault(); toast(pt ? `You’re already linked to ${ptName}.` : "Invite code saved."); e.currentTarget.hidden = true; });
     root.querySelector("[data-signout2]").onclick = () => { signOut(); resetMode(); go("#/"); };

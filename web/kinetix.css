@@ -111,7 +111,7 @@ button.avatar { cursor: pointer; }
 .btn-outline-white { background: transparent; color: #fff; border: 2px solid rgba(255, 255, 255, .6); }
 .btn-outline-white:hover { color: var(--primary-ink); background: #fff; border-color: #fff; }
 .btn:disabled, .btn[aria-disabled="true"] { background: #dfe2de; color: #55554f; border-color: transparent; box-shadow: none; cursor: not-allowed; }
-.link-btn { border: 0; background: none; padding: 0; font-weight: 700; color: var(--primary-strong); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
+.link-btn { display: inline-flex; align-items: center; border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--primary-strong); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; }
 .link-btn:hover { color: #0f5f2c; }
 .tag { display: inline-flex; align-items: center; gap: 4px; font-size: .8125rem; font-weight: 700; padding: 5px 10px; border-radius: 999px; white-space: nowrap; background: var(--neutral-soft); color: #55615a; }
 .tag.mint { background: var(--primary-soft); color: var(--primary-ink); }

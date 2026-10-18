@@ -34,6 +34,19 @@ document.addEventListener("click", (e) => {   // click outside closes any open a
   });
 });
 
+// Care-team "Message" controls (patient home / settings / PT alert) — delegated so a stale module
+// can't leave a dead button after the messages route landed.
+document.addEventListener("click", (e) => {
+  const el = e.target.closest?.("[data-message], [data-msg]");
+  if (!el || el.tagName === "A") return;
+  e.preventDefault();
+  const user = currentUser();
+  if (!user) return;
+  const withId = el.dataset.with || "";
+  const base = user.role === "pt" ? "#/provider/messages" : "#/patient/messages";
+  go(withId ? `${base}?with=${encodeURIComponent(withId)}` : base);
+});
+
 export function bindHeader(root) {
   const btn = root.querySelector("[data-menu]"), menu = btn?.nextElementSibling;
   if (btn && menu) {

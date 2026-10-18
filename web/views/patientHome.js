@@ -14,6 +14,9 @@ export async function patientHomeRoute({ user }) {
   const minutes = 5 + items.reduce((t, i) => t + Math.ceil(i.sets * i.reps / 6), 0);
   const msg = h.plan?.message;
   const ptName = h.pt?.short || "your PT";
+  const msgHref = h.pt?.id
+    ? `#/patient/messages?with=${encodeURIComponent(h.pt.id)}`
+    : "#/patient/messages";
   const good = h.goodThisWeek, prev = h.goodLastWeek;
   const in10 = good == null ? null : Math.round(good * 10), prev10 = prev == null ? null : Math.round(prev * 10);
   const trend = in10 == null ? "Finish a session to see how your reps look." :
@@ -41,7 +44,7 @@ export async function patientHomeRoute({ user }) {
           <div class="who"><span class="avatar blue">${esc(initials(h.pt.name))}</span><div><b>From ${esc(ptName)}</b><small>${h.plan?.changes ? `Updated your plan · ${h.plan.changes} change${h.plan.changes === 1 ? "" : "s"}` : "Your current plan"}</small></div></div>
           ${msg?.text ? `<blockquote>“${esc(msg.text)}”</blockquote>` : ""}
           <div class="pt-limit">${ICON.info}<span>Stop and message me if pain goes above ${h.alertAt} out of 10.</span></div>
-          <div class="pt-foot"><span>${ICON.calendar}Next visit <b>${esc(h.profile?.nextVisit ? niceDate(h.profile.nextVisit) : "not booked")}</b></span><button type="button" class="link-btn" data-message>Message</button></div>
+          <div class="pt-foot"><span>${ICON.calendar}Next visit <b>${esc(h.profile?.nextVisit ? niceDate(h.profile.nextVisit) : "not booked")}</b></span><a class="link-btn" href="${msgHref}" data-message${h.pt?.id ? ` data-with="${esc(h.pt.id)}"` : ""}>Message</a></div>
         </section>` : ""}
         <section class="card" style="flex:1;display:flex;flex-direction:column;gap:16px" aria-labelledby="weekTitle">
           <div class="row-between"><h3 id="weekTitle" style="font-size:1.125rem;font-weight:800">Your week</h3><span class="muted" style="font-weight:500">${h.sessionsThisWeek} of ${h.goal} sessions</span></div>
@@ -52,8 +55,4 @@ export async function patientHomeRoute({ user }) {
       </aside>
     </div>`, { active: "today", user, title: "Today" });
   root.querySelector("[data-start]")?.addEventListener("click", () => { beginPlanRun(pid, h.plan); go("#/patient/warmup"); });
-  root.querySelector("[data-message]")?.addEventListener("click", () => {
-    if (h.pt?.id) go(`#/patient/messages?with=${encodeURIComponent(h.pt.id)}`);
-    else go("#/patient/messages");
-  });
 }
