@@ -247,8 +247,8 @@ function showSetup(g) {
   $("#setupBar").style.width = `${Math.round((g.progress || 0) * 100)}%`;
 }
 
-function pageWelcomeLine() {
-  return `${COACH_NAME}, how are you? Make sure you fit yourself in the screen so we can calibrate your movements. I'll start counting your reps whenever you're ready — just press Start session when you want to begin.`;
+function sessionWelcomeLine() {
+  return `${COACH_NAME}, how are you? Make sure you fit yourself in the screen so we can calibrate your movements. I'll start counting your reps whenever you're ready.`;
 }
 const hideSetup = () => { $("#setup").hidden = true; };
 
@@ -380,9 +380,10 @@ function onMovement(frames) {
   });
 
   // Spoken coaching: natural sentences (not raw chip text). Queued so it won't overlap.
+  // Session-complete summary is spoken separately after the last rep.
   const spoken = good
-    ? `${repCount}. Good form. ${nextGoodExtra()}${done ? " Set complete." : ""}`
-    : `${repCount}. ${coachSentence(out.label, fixCue)}${done ? " Set complete." : ""}`;
+    ? `${repCount}. Good form. ${nextGoodExtra()}`
+    : `${repCount}. ${coachSentence(out.label, fixCue)}`;
   speak(spoken);
 
   if (done) showSetSummary();
@@ -452,18 +453,86 @@ async function askCoach(raw) {
   speak(reply);
 }
 
+function localSessionSummary(ctx) {
+  const ex = ctx.exercise_title || "this exercise";
+  const good = ctx.tallies?.good || 0;
+  const bad = ctx.tallies?.bad || 0;
+  const skip = ctx.tallies?.skip || 0;
+  const target = ctx.reps_target || ctx.reps_done || 0;
+  const done = ctx.reps_done || 0;
+
+  const mistakeCounts = {};
+  for (const r of ctx.reps || []) {
+    if (r.good) continue;
+    const key = r.title || r.short || r.label || "form issue";
+    mistakeCounts[key] = (mistakeCounts[key] || 0) + 1;
+  }
+  const topMistakes = Object.entries(mistakeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, n]) => (n > 1 ? `${name} (${n} times)` : name));
+
+  let spoken = `Session complete. You finished ${done} of ${target} ${ex} reps. `;
+  spoken += `${good} looked good`;
+  if (bad) spoken += `, and ${bad} need some work`;
+  spoken += ".";
+  if (skip) spoken += ` ${skip} movement${skip === 1 ? " wasn't" : "s weren't"} counted.`;
+  if (topMistakes.length) {
+    spoken += ` The main things to practice next time: ${topMistakes.join(", ")}.`;
+  } else {
+    spoken += " Great consistency — keep that form going next session.";
+  }
+  return spoken.trim();
+}
+
 async function showSetSummary() {
   const panel = $("#setSummary");
-  if (!panel) return;
-  panel.hidden = false;
-  $("#setSummaryBody").textContent = "Writing your summary…";
-  $("#setSummaryTips").innerHTML = "";
+  const ctx = sessionMemory.context();
+  const local = localSessionSummary(ctx); // always starts with "Session complete."
+
+  if (panel) {
+    panel.hidden = false;
+    $("#setSummaryBody").textContent = "Writing your patient summary…";
+    $("#setSummaryTips").innerHTML = "";
+    const focusEl = $("#setSummaryFocus");
+    if (focusEl) focusEl.innerHTML = "";
+  }
+
   endAtpSession();
-  const result = await fetchSummary(sessionMemory.context());
-  $("#setSummaryBody").textContent = result.summary;
-  $("#setSummaryTips").innerHTML = (result.tips || []).map((t) => `<li>${esc(t)}</li>`).join("");
-  const first = (result.summary || "").split(/(?<=[.!?])\s+/)[0];
-  if (first) speak(first);
+
+  let displaySummary = local;
+  let tips = [];
+  let spoken = local;
+  let focus = [];
+  let source = "local";
+  try {
+    const result = await fetchSummary(ctx);
+    source = result.source || "local";
+    if (result?.summary) displaySummary = result.summary;
+    if (Array.isArray(result?.tips)) tips = result.tips;
+    if (result?.spoken_summary) spoken = result.spoken_summary;
+    else if (tips.length) spoken = `${local} Tips for next time: ${tips.slice(0, 3).join(". ")}.`;
+    if (Array.isArray(result?.focus_areas)) focus = result.focus_areas;
+  } catch { /* keep local summary */ }
+
+  if (!String(spoken).toLowerCase().startsWith("session complete")) {
+    spoken = `Session complete. ${spoken}`;
+  }
+
+  if (panel) {
+    $("#setSummaryBody").textContent = displaySummary;
+    $("#setSummaryTips").innerHTML = tips.map((t) => `<li>${esc(t)}</li>`).join("");
+    const focusEl = $("#setSummaryFocus");
+    if (focusEl) {
+      focusEl.innerHTML = focus.length
+        ? `<b>Focus next session:</b> ${focus.map((f) => esc(f)).join(" · ")}`
+        : "";
+    }
+    const src = $("#setSummarySource");
+    if (src) src.textContent = source === "oci" ? "Summary by OCI Generative AI" : "Summary (local)";
+  }
+  appendCoachMsg("assistant", spoken);
+  speak(spoken); // queued after the last-rep cue
 }
 
 $("#coachForm")?.addEventListener("submit", (e) => {
@@ -718,9 +787,10 @@ window.addEventListener("resize", () => { if (video.videoWidth) fitStage(); });
 async function start() {
   try {
     $("#start").disabled = true;
-    // Click unlocks audio if the page-load welcome was blocked; keep setup quiet briefly.
-    welcomeQuietUntil = performance.now() + 4000;
-    speak("Alright — let's get set up. Show me your whole body in the frame.", { interrupt: false });
+    // Welcome plays only on Start session (click also unlocks audio in the browser).
+    const welcome = sessionWelcomeLine();
+    welcomeQuietUntil = performance.now() + 16000;
+    speak(welcome, { interrupt: true });
     await loadLandmarker();
     seg.reset(); gate.reset(); cal = new Calibrator(model.calibration ?? { reps: 3, window: 20 }); calAmps = [];
     phase = "setup"; outFrames = 0; repCount = 0; lastTime = -1; facingHist = []; smoothImg = null; shownAngle = {}; smoothAngle = {};
@@ -742,6 +812,7 @@ async function start() {
     await video.play();
     fitStage();
     showSetup({ title: "Show your whole body", sub: "Step back until you're fully in the frame, head to feet.", progress: 0 });
+    appendCoachMsg("system", welcome);
     running = true; $("#stop").disabled = false; $("#status").textContent = "";
     loop();
   } catch (e) {
@@ -994,26 +1065,3 @@ if (params.get("expected")) $("#expected").value = params.get("expected");
 if (params.get("autostart") || params.has("test") || params.has("expected")) leaveWarmup();
 if (params.get("autostart")) start();
 
-// Page-load welcome (neural TTS only). Browsers may block audio until a click — retry on first tap.
-async function greetOnLoad() {
-  const line = pageWelcomeLine();
-  welcomeQuietUntil = performance.now() + 18000;
-  try { appendCoachMsg("system", line); } catch { /* coach UI may not be ready */ }
-  if (!$("#voice")?.checked) return;
-
-  const play = () => speakNatural(line, { voice: FEMALE_VOICE, interrupt: true });
-  const result = await play();
-  if (result?.ok) {
-    const tip = $("#ttsStatus");
-    if (tip) tip.textContent = `Natural voice ready (${FEMALE_VOICE})`;
-    return;
-  }
-  const unlock = async () => {
-    document.removeEventListener("pointerdown", unlock);
-    await play();
-  };
-  document.addEventListener("pointerdown", unlock, { once: true });
-  const tip = $("#ttsStatus");
-  if (tip) tip.textContent = "Tap anywhere to hear your coach";
-}
-greetOnLoad();

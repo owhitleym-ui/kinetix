@@ -105,12 +105,15 @@ def local_chat(message: str, session_context: dict[str, Any] | None) -> str:
 
 
 def local_summary(session_context: dict[str, Any] | None) -> dict[str, Any]:
+    """Detailed patient-facing summary used when OCI GenAI is unavailable."""
     ctx = session_context or {}
     exercise = ctx.get("exercise_title") or ctx.get("exercise") or "your exercise"
     tallies = ctx.get("tallies") or {}
     good = int(tallies.get("good") or 0)
     bad = int(tallies.get("bad") or 0)
     skip = int(tallies.get("skip") or 0)
+    target = int(ctx.get("reps_target") or 0)
+    done = int(ctx.get("reps_done") or (good + bad))
     reps = ctx.get("reps") or []
     mistake_counts: dict[str, int] = {}
     for r in reps:
@@ -119,27 +122,67 @@ def local_summary(session_context: dict[str, Any] | None) -> dict[str, Any]:
         key = r.get("title") or r.get("label") or "Form issue"
         mistake_counts[key] = mistake_counts.get(key, 0) + 1
     top = sorted(mistake_counts.items(), key=lambda x: -x[1])[:3]
+    accuracy = round(100 * good / done) if done else 0
 
     summary = (
-        f"You completed {good + bad} counted reps of {exercise} "
-        f"({good} good, {bad} to fix"
+        f"Patient completed {done} of {target or done} counted reps of {exercise}. "
+        f"Form quality: {good} good ({accuracy}%), {bad} with corrections"
         + (f", {skip} not counted" if skip else "")
-        + ")."
+        + "."
     )
     if top:
-        names = ", ".join(n for n, _ in top)
-        summary += f" Most common issues: {names}."
+        parts = [f"{n} ({c}×)" for n, c in top]
+        summary += f" Primary form issues this session: {', '.join(parts)}."
+    else:
+        summary += " No recurring form issues detected — solid consistency."
 
     tips: list[str] = []
     for title, _ in top:
-        cue = next((r.get("cue") for r in reversed(reps) if (r.get("title") or r.get("label")) == title and r.get("cue")), None)
-        tips.append(cue or f"Watch for: {title}.")
+        cue = next(
+            (
+                r.get("cue")
+                for r in reversed(reps)
+                if (r.get("title") or r.get("label")) == title and r.get("cue")
+            ),
+            None,
+        )
+        tips.append(cue or f"Focus on correcting: {title}.")
     if not tips:
-        tips = ["Keep the same depth and tempo.", "Stay facing the camera.", "Reset fully between reps."]
-    return {"summary": summary, "tips": tips[:5]}
+        tips = [
+            "Keep the same depth and tempo.",
+            "Stay facing the camera for reliable tracking.",
+            "Reset fully between reps.",
+        ]
+
+    spoken = (
+        f"Session complete. You finished {done} of {target or done} {exercise} reps. "
+        f"{good} looked good"
+        + (f", and {bad} need some work" if bad else "")
+        + "."
+    )
+    if top:
+        spoken += f" Focus next time on: {', '.join(n for n, _ in top)}."
+    else:
+        spoken += " Great consistency — keep that form going."
+
+    return {
+        "summary": summary,
+        "tips": tips[:5],
+        "spoken_summary": spoken,
+        "highlights": {
+            "exercise": exercise,
+            "reps_done": done,
+            "reps_target": target,
+            "good": good,
+            "bad": bad,
+            "skip": skip,
+            "accuracy_pct": accuracy,
+            "top_issues": [{"name": n, "count": c} for n, c in top],
+        },
+    }
 
 
-def _chat_oci(system: str, user: str) -> str | None:
+def _chat_oci(system: str, user: str, max_tokens: int = 256) -> str | None:
     if not _configured():
         return None
     try:
@@ -180,7 +223,9 @@ def _chat_oci(system: str, user: str) -> str | None:
         try:
             content = TextContent(text=f"{system}\n\n{user}")
             message = Message(role="USER", content=[content])
-            chat_request = GenericChatRequest(messages=[message], max_tokens=256, temperature=0.2)
+            chat_request = GenericChatRequest(
+                messages=[message], max_tokens=max_tokens, temperature=0.2
+            )
             details = ChatDetails(compartment_id=compartment, serving_mode=serving, chat_request=chat_request)
             resp = client.chat(details)
             data = resp.data
@@ -194,7 +239,7 @@ def _chat_oci(system: str, user: str) -> str | None:
         chat_request = CohereChatRequest(
             message=user,
             preamble_override=system,
-            max_tokens=256,
+            max_tokens=max_tokens,
             temperature=0.2,
             is_stream=False,
         )
@@ -283,29 +328,56 @@ def generate_chat(
 
 
 def generate_summary(session_context: dict[str, Any] | None) -> tuple[dict[str, Any], str]:
+    """Detailed patient session report for the UI + a shorter spoken_summary for TTS."""
     fallback = local_summary(session_context)
-    ctx_json = json.dumps(session_context or {}, ensure_ascii=False)[:6000]
+    ctx_json = json.dumps(session_context or {}, ensure_ascii=False)[:8000]
     system = (
-        "You are a physical therapy coach writing an end-of-set summary. "
-        "Return strict JSON only with keys: summary (string, 1-3 sentences), tips (array of 3-5 short strings). "
-        "Use only the provided session data. No markdown."
+        "You are an experienced physical therapist writing a post-session patient report "
+        "for home exercise (Form Check app). Use ONLY the session_context JSON — do not invent "
+        "diagnoses, medications, or data that is not present. "
+        "Return strict JSON only (no markdown) with these keys:\n"
+        "- summary: string, 4-7 sentences for the patient to read. Cover: what exercise, "
+        "how many reps completed vs target, good vs needs-work counts, which form issues "
+        "showed up most, what improved or stayed solid, and one encouraging close.\n"
+        "- tips: array of 4-6 actionable coaching tips for the next session "
+        "(specific to the mistakes seen).\n"
+        "- spoken_summary: string, 3-5 short spoken sentences starting with "
+        "'Session complete.' Suitable for text-to-speech (warm, clear, no bullets).\n"
+        "- focus_areas: array of 1-3 short labels of the top form issues to practice."
     )
-    user = f"session_context:\n{ctx_json}"
-    text = _chat_oci(system, user)
+    user = (
+        "Write the patient session report from this data.\n"
+        f"session_context:\n{ctx_json}"
+    )
+    text = _chat_oci(system, user, max_tokens=900)
     if text:
         try:
-            # Strip optional fences
             cleaned = text.strip()
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
                 cleaned = re.sub(r"\s*```$", "", cleaned)
             data = json.loads(cleaned)
-            summary = str(data.get("summary") or fallback["summary"])
+            summary = str(data.get("summary") or fallback["summary"]).strip()
             tips = data.get("tips") or fallback["tips"]
             if not isinstance(tips, list):
                 tips = fallback["tips"]
-            tips = [str(t).strip() for t in tips if str(t).strip()][:5]
-            return {"summary": summary, "tips": tips or fallback["tips"]}, "oci"
+            tips = [str(t).strip() for t in tips if str(t).strip()][:6]
+            spoken = str(data.get("spoken_summary") or fallback.get("spoken_summary") or summary).strip()
+            if not spoken.lower().startswith("session complete"):
+                spoken = f"Session complete. {spoken}"
+            focus = data.get("focus_areas") or [
+                x["name"] for x in (fallback.get("highlights") or {}).get("top_issues") or []
+            ]
+            if not isinstance(focus, list):
+                focus = []
+            focus = [str(f).strip() for f in focus if str(f).strip()][:3]
+            return {
+                "summary": summary,
+                "tips": tips or fallback["tips"],
+                "spoken_summary": spoken,
+                "focus_areas": focus,
+                "highlights": fallback.get("highlights"),
+            }, "oci"
         except Exception as e:  # noqa: BLE001
             print(f"[oci_genai] summary JSON parse failed: {e}")
     return fallback, "local"

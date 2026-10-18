@@ -5,7 +5,7 @@ const API_BASE = (typeof window !== "undefined" && window.FORM_CHECK_API)
 
 const CUE_TIMEOUT_MS = 1500;
 const CHAT_TIMEOUT_MS = 12000;
-const SUMMARY_TIMEOUT_MS = 15000;
+const SUMMARY_TIMEOUT_MS = 45000;
 
 async function post(path, body, timeoutMs) {
   const ctrl = new AbortController();
@@ -49,6 +49,9 @@ export async function fetchSummary(session_context) {
     return {
       summary: data.summary || "",
       tips: Array.isArray(data.tips) ? data.tips : [],
+      spoken_summary: data.spoken_summary || "",
+      focus_areas: Array.isArray(data.focus_areas) ? data.focus_areas : [],
+      highlights: data.highlights || null,
       source: data.source || "oci",
       ok: true,
     };
@@ -56,6 +59,8 @@ export async function fetchSummary(session_context) {
     return {
       summary: "Session complete. Review your rep log for what to practice.",
       tips: ["Keep facing the camera.", "Finish each rep fully.", "Reset to the start position between reps."],
+      spoken_summary: "",
+      focus_areas: [],
       source: "local",
       ok: false,
     };

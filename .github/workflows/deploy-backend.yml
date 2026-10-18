@@ -1,13 +1,16 @@
-# Redeploy the FastAPI backend on the OCI server whenever backend code changes on main.
+# Redeploy Form Check on the OCI VM (API + TTS + nginx static web) when relevant paths change.
 # Needs repo secrets: OCI_HOST, OCI_USER, OCI_SSH_KEY (private key whose public half is in the
-# server's ~/.ssh/authorized_keys). The server resets to origin/main, then deploy.sh: pip install, restart, health check.
-name: Deploy backend to OCI
+# server's ~/.ssh/authorized_keys). Runs deploy.sh on the server.
+name: Deploy to OCI
 
 on:
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - "web/**"
+      - "voice-feedback/**"
+      - "deploy/**"
       - "deploy.sh"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
