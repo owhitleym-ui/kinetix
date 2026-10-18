@@ -4,6 +4,7 @@
 //   P.img = 33 x [x, y, visibility] (normalized image coords), P.t = time in ms, P.ok = whole body in frame.
 
 import { primarySignal } from "./features.js";
+import { imgSignal } from "./rules.js";
 
 // Whole body, head to feet: nose, shoulders, elbows, wrists, hips, knees, ankles, heels, toes.
 const PARTS = {
@@ -31,21 +32,59 @@ const knees = (P) => (angleAt(P[23], P[25], P[27]) + angleAt(P[24], P[26], P[28]
 const rightShoulder = (P) => angleAt(P[24], P[12], P[14]);
 const leftShoulder = (P) => angleAt(P[23], P[11], P[13]);
 
-// Per-exercise rules. minAmp is in the detector's units (squat: % of leg length, arms: degrees).
+// Per-exercise rules. minAmp is in the detector's units (squat: % of leg length, arms: degrees, hand across the body:
+// shoulder widths). restPose(P, slack) takes extra slack from the mobility setting; gentleShallow is the softer
+// "not counted" hint used with mobility limits.
+const ARM_DOWN = "Let your right arm hang by your side";
+const NINETY_NINETY = "Lift your right elbow out to shoulder height, bent at a right angle, forearm pointing forward";
+const at9090 = (P, slack = 0) => Math.abs(imgSignal("arm_raise", P) - 90) < 30 + slack;
+// a rotation rep only counts if it's done in the test position: elbow raised toward shoulder height at the start
+const elbowUp = (frames) => frames.slice(0, 3).reduce((a, P) => a + imgSignal("arm_raise", P), 0) / Math.min(3, frames.length) >= 45;
 export const RULES = {
   squat: {
-    restPose: (P) => knees(P) > 150, restHint: "Stand tall with your feet hip-width apart",
+    restPose: (P, slack = 0) => knees(P) > 150 - slack, restHint: "Stand tall with your feet hip-width apart",
     minAmp: 8, shallowHint: "Too shallow to count: sit down and back further", shallowShort: "Not deep enough",
+    gentleShallow: "Not counted yet: lower a little more if it's comfortable",
     minSec: 0.8, maxSec: 8, maxHipShift: 0.12, maxFootShift: 0.06,
   },
   arm_abduction: {
-    restPose: (P) => rightShoulder(P) < 35, restHint: "Let your right arm hang by your side",
+    restPose: (P, slack = 0) => rightShoulder(P) < 35 + slack, restHint: ARM_DOWN,
     minAmp: 60, shallowHint: "Raise your arm higher for it to count", shallowShort: "Not high enough",
     minSec: 1.0, maxSec: 8, maxHipShift: 0.08, maxFootShift: 0.06, otherArm: "left",
   },
   shoulder_extension: {
-    restPose: (P) => rightShoulder(P) < 35, restHint: "Let your right arm hang by your side",
+    restPose: (P, slack = 0) => rightShoulder(P) < 35 + slack, restHint: ARM_DOWN,
     minSec: 0, maxSec: 99, maxHipShift: 0.08, maxFootShift: 0.06,
+  },
+  // rule-check exercises (clinical thresholds, see rules.js)
+  shoulder_abduction_full: {
+    restPose: (P, slack = 0) => imgSignal("arm_raise", P) < 35 + slack, restHint: ARM_DOWN,
+    minAmp: 60, shallowHint: "Raise your arm higher for it to count", shallowShort: "Not high enough",
+    minSec: 0.6, maxSec: 10, maxHipShift: 0.08, maxFootShift: 0.06, otherArm: "left",
+  },
+  shoulder_adduction: {
+    restPose: (P, slack = 0) => imgSignal("hand_across", P) < 0 && imgSignal("arm_raise", P) < 45 + slack, restHint: ARM_DOWN,
+    minAmp: 0.6, shallowHint: "Bring your arm across your body for it to count", shallowShort: "Not across",
+    gentleShallow: "Not counted yet: bring your arm a little further across if it's comfortable",
+    minSec: 0.6, maxSec: 10, maxHipShift: 0.08, maxFootShift: 0.06,
+  },
+  shoulder_external_rotation: {
+    restPose: at9090, restHint: NINETY_NINETY, startPose: elbowUp,
+    minAmp: 35, shallowHint: "Rotate your forearm further up for it to count", shallowShort: "Not rotated",
+    gentleShallow: "Not counted yet: rotate your forearm a little further if it's comfortable",
+    minSec: 0.6, maxSec: 10, maxHipShift: 0.08, maxFootShift: 0.06,
+  },
+  shoulder_internal_rotation: {
+    restPose: at9090, restHint: NINETY_NINETY, startPose: elbowUp,
+    minAmp: 35, shallowHint: "Rotate your forearm further down for it to count", shallowShort: "Not rotated",
+    gentleShallow: "Not counted yet: rotate your forearm a little further if it's comfortable",
+    minSec: 0.6, maxSec: 10, maxHipShift: 0.08, maxFootShift: 0.06,
+  },
+  arm_circles: {
+    restPose: (P, slack = 0) => imgSignal("arm_raise", P) < 35 + slack, restHint: ARM_DOWN,
+    minAmp: 60, shallowHint: "Make a full circle for it to count", shallowShort: "Not a full circle",
+    gentleShallow: "Not counted yet: make the circle a little bigger if it's comfortable",
+    minSec: 0.6, maxSec: 10, maxHipShift: 0.08, maxFootShift: 0.06, otherArm: "left",
   },
 };
 
@@ -54,6 +93,7 @@ export const RULES = {
 //  slight:   ~15% less range needed to count; range-of-motion mistakes need ~1.7x the evidence, typical
 //            compensations ~1.25x, everything else slightly more
 //  moderate: ~25% less range; range-of-motion mistakes ~3x the evidence, compensations ~1.7x
+// Rule-check exercises: range-of-motion limits move 15% / 25% toward rest, compensation limits allow 20% / 40% more.
 // Range-of-motion / compensation feedback uses gentle wording in both.
 const GENTLE_CUES = {
   ERR_SHALLOW_SQUAT: "If it's comfortable, try to go a little lower. Only as far as feels okay.",
@@ -61,6 +101,12 @@ const GENTLE_CUES = {
   ERR_LIFTED_HEELS: "Try to keep your heels down. A slightly smaller squat is fine.",
   ERR_ELEVATED_SHOULDER: "Try to keep your shoulder relaxed. It's fine to lift a little lower.",
   ERR_TORSO_FORWARD: "Try to stay upright. It's fine to move your arm back a little less.",
+  // rule-check exercises
+  ERR_LOW_RAISE: "If it's comfortable, try to lift your arm a little higher. Only as far as feels okay.",
+  ERR_NOT_ACROSS: "If it's comfortable, bring your arm a little further across. Only as far as feels okay.",
+  ERR_LOW_ROTATION: "If it's comfortable, rotate a little further. Only as far as feels okay.",
+  ERR_SMALL_CIRCLE: "If it's comfortable, make the circle a little bigger. Only as far as feels okay.",
+  ERR_TRUNK_LEAN: "Try to keep your trunk upright. It's fine to move your arm a little less.",
 };
 const relaxed = (rom, comp) => ({
   ERR_SHALLOW_SQUAT: rom, ERR_LOW_ABDUCTION: rom,                                        // range of motion
@@ -68,8 +114,8 @@ const relaxed = (rom, comp) => ({
 });
 export const MOBILITY = {
   standard: { label: "None", tauScale: 1, downweight: {}, ampScale: 1, extraSec: 0, restSlack: 0, cues: {} },
-  slight: { label: "Slight", tauScale: 0.88, downweight: relaxed(0.6, 0.8), ampScale: 0.85, extraSec: 2, restSlack: 5, cues: GENTLE_CUES },
-  moderate: { label: "Moderate", tauScale: 0.75, downweight: relaxed(0.35, 0.6), ampScale: 0.75, extraSec: 4, restSlack: 10, cues: GENTLE_CUES },
+  slight: { label: "Slight", tauScale: 0.88, downweight: relaxed(0.6, 0.8), ampScale: 0.85, extraSec: 2, restSlack: 5, compSlack: 1.2, cues: GENTLE_CUES },
+  moderate: { label: "Moderate", tauScale: 0.75, downweight: relaxed(0.35, 0.6), ampScale: 0.75, extraSec: 4, restSlack: 10, compSlack: 1.4, cues: GENTLE_CUES },
 };
 MOBILITY.limited = MOBILITY.moderate;   // older names
 MOBILITY.small = MOBILITY.slight;
@@ -82,9 +128,8 @@ export function rulesFor(ex, mobility = "standard") {
     ...r,
     minAmp: r.minAmp === undefined ? undefined : r.minAmp * m.ampScale,
     maxSec: r.maxSec + m.extraSec,
-    restPose: ex === "squat" ? (P) => knees(P) > 150 - m.restSlack : (P) => rightShoulder(P) < 35 + m.restSlack,
-    shallowHint: ex === "squat" ? "Not counted yet: lower a little more if it's comfortable"
-      : "Not counted yet: raise your arm a little higher if it's comfortable",
+    restPose: (P) => r.restPose(P, m.restSlack),
+    shallowHint: r.gentleShallow ?? "Not counted yet: raise your arm a little higher if it's comfortable",
   };
 }
 
@@ -122,11 +167,15 @@ export function validateRep(frames, seg, rules) {
   if (secs < rules.minSec) return { ok: false, reason: "Too quick to count: move slowly and with control", short: "Too fast" };
   if (secs > rules.maxSec) return { ok: false, reason: "That took too long to count as one rep", short: "Too slow" };
   if (hasImg) {
+    // shifts are fractions of a 16:9 frame's width; a portrait (phone) frame is narrower, so scale to match
+    const k = (frames[0].aspect ?? 16 / 9) / (16 / 9);
     const hipX = frames.map((f) => (f.img[23][0] + f.img[24][0]) / 2);
     const footX = frames.map((f) => (f.img[27][0] + f.img[28][0]) / 2);
-    if (range(hipX) > rules.maxHipShift || range(footX) > rules.maxFootShift)
+    if (range(hipX) * k > rules.maxHipShift || range(footX) * k > rules.maxFootShift)
       return { ok: false, reason: "Stay in one spot while you do the rep", short: "Moved position" };
   }
+  if (rules.startPose && hasImg && !rules.startPose(frames))
+    return { ok: false, reason: "Raise your elbow to shoulder height first, then rotate", short: "Elbow not raised" };
   let amp = null;
   if (seg.cfg.mode !== "tempo") {
     const d = frames.map((f) => seg.away(primarySignal(seg.cfg.primary, f)));

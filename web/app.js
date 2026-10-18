@@ -4,14 +4,24 @@
 import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
 import { Calibrator, classify, decide, makeSegmenter, repFeatures } from "./features.js";
 import { MOBILITY, SetupGate, framing, rulesFor, validateRep } from "./session.js";
+import { judgeRules, ruleValues } from "./rules.js";
+import { ARROW, REGIONS, findExercise, regionArt } from "./catalog.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "models/pose_landmarker_full.task";
-const EXERCISES = ["squat", "arm_abduction", "shoulder_extension"];
+const EXERCISES = ["squat", "arm_abduction", "shoulder_extension", "shoulder_abduction_full", "shoulder_adduction",
+  "shoulder_external_rotation", "shoulder_internal_rotation", "arm_circles"];
+// Trained classifiers (REHAB26) for the first three; rule checks with clinical thresholds for the rest.
+const MODEL_FILE = (ex) => (["squat", "arm_abduction", "shoulder_extension"].includes(ex) ? `models/rehab26_${ex}.json` : `models/rules_${ex}.json`);
 const HOWTO = {
   squat: "<b>Bodyweight Squat.</b> Stand facing the camera, far enough back that your <b>whole body, head to feet</b>, is in the frame. Hold still until it says <b>Go</b>, then squat down and stand all the way back up for each rep.",
   arm_abduction: "<b>Shoulder Abduction.</b> Stand facing the camera with your <b>whole body, head to feet</b>, in the frame and your right arm by your side. Hold still until it says <b>Go</b>, then raise your <b>right</b> arm out to the side and bring it all the way back down for each rep.",
   shoulder_extension: "<b>Shoulder Extension.</b> Stand facing the camera with your <b>whole body, head to feet</b>, in the frame and your right arm by your side. After <b>Go</b>, each time you hear <b>“Back”</b>, move your <b>right</b> arm straight back behind you and return before the next cue.",
+  shoulder_abduction_full: "<b>Shoulder Abduction AROM</b> (active range of motion). Stand facing the camera, <b>whole body in the frame</b>, right arm by your side. After <b>Go</b>, raise your <b>straight right arm</b> out to the side and all the way up beside your ear, then lower it.",
+  shoulder_adduction: "<b>Shoulder Horizontal Adduction.</b> Stand facing the camera, <b>whole body in the frame</b>, right arm by your side. After <b>Go</b>, swing your <b>straight right arm</b> across the front of your body toward your left side, then back.",
+  shoulder_external_rotation: "<b>External Rotation at 90° Abduction.</b> Stand facing the camera, <b>whole body in the frame</b>. Lift your right elbow out to <b>shoulder height</b>, bent at a <b>right angle</b> with the forearm pointing forward. After <b>Go</b>, rotate the forearm <b>up</b> toward the ceiling, keeping the elbow where it is, then back.",
+  shoulder_internal_rotation: "<b>Internal Rotation at 90° Abduction.</b> Stand facing the camera, <b>whole body in the frame</b>. Lift your right elbow out to <b>shoulder height</b>, bent at a <b>right angle</b> with the forearm pointing forward. After <b>Go</b>, rotate the forearm <b>down</b> toward the floor, keeping the elbow where it is, then back.",
+  arm_circles: "<b>Shoulder Circumduction.</b> Stand facing the camera, <b>whole body in the frame</b>, right arm by your side. After <b>Go</b>, move your straight right arm in <b>large, slow circles</b>, reaching up overhead each time.",
 };
 const MOBILITY_NOTES = {
   slight: "<b>Slight mobility limits.</b> A slightly smaller range of motion counts, and small range issues are flagged less. Move only as far as is comfortable.",
@@ -19,6 +29,8 @@ const MOBILITY_NOTES = {
 };
 const mobilityNote = () => (MOBILITY_NOTES[mobility] ? `<br><br>${MOBILITY_NOTES[mobility]}` : "");
 const CALIBRATE = "You get feedback on every rep. After your first few reps it also adapts to your body, which makes it more precise.";
+const RULES_NOTE = "You get feedback on every rep: each one is measured against clinical range-of-motion targets, and the panel shows what was measured.";
+const note = () => (model?.type === "rules" ? RULES_NOTE : CALIBRATE);
 
 // Body-only skeleton (no face points).
 const JOINT = { ls: 11, rs: 12, le: 13, re: 14, lw: 15, rw: 16, lh: 23, rh: 24, lk: 25, rk: 26, la: 27, ra: 28, lt: 31, rt: 32 };
@@ -27,25 +39,34 @@ const BONES = [["ls", "rs"], ["ls", "le"], ["le", "lw"], ["rs", "re"], ["re", "r
 const DOTS = ["ls", "rs", "le", "re", "lw", "rw", "neck", "pelvis", "lh", "rh", "lk", "rk", "la", "ra"];
 // Joint angles drawn on the video: [label, a, b (vertex), c] as MediaPipe indices.
 const ANGLES = {
-  squat: [["L knee", 23, 25, 27], ["R knee", 24, 26, 28]],
-  arm_abduction: [["R shoulder", 24, 12, 14]],
-  shoulder_extension: [["R shoulder", 24, 12, 14]],
+  squat: [["Left knee", 23, 25, 27], ["Right knee", 24, 26, 28]],
+  arm_abduction: [["Right shoulder", 24, 12, 14]],
+  shoulder_extension: [["Right shoulder", 24, 12, 14]],
+  shoulder_abduction_full: [["Right shoulder", 24, 12, 14]],
+  shoulder_adduction: [["Right elbow", 12, 14, 16]],
+  shoulder_external_rotation: [["Right elbow", 12, 14, 16], ["Right shoulder", 24, 12, 14]],
+  shoulder_internal_rotation: [["Right elbow", 12, 14, 16], ["Right shoulder", 24, 12, 14]],
+  arm_circles: [["Right shoulder", 24, 12, 14]],
 };
 const STEP = 5;   // angles are shown in 5° steps
 
 const $ = (s) => document.querySelector(s);
+// Optional URL parameters for quick tests: ?ex=squat&video=testvideos/clip.mp4&expected=CORRECT&autostart=1
+const params = new URLSearchParams(location.search);
+const TEST = params.has("test") || params.has("expected");   // testing aids + model details only in test mode
 const video = $("#video"), canvas = $("#canvas"), ctx = canvas.getContext("2d");
 // Clear, professional names for what the model detects
 const LABELS = {
   CORRECT: "Good form",
-  ERR_KNEES_INSIDE: "Knees caving in", ERR_TORSO_TO_SIDE: "Leaning to one side", ERR_SHALLOW_SQUAT: "Not deep enough",
-  ERR_KNEES_FORWARD: "Knees past toes", ERR_LIFTED_HEELS: "Heels lifting",
-  ERR_ARM_FORWARD: "Arm drifting forward", ERR_ELEVATED_SHOULDER: "Shoulder shrugging", ERR_HEAD_TO_SIDE: "Head tilting",
-  ERR_LOW_ABDUCTION: "Arm not high enough", ERR_BENT_ARM: "Elbow bending",
-  ERR_TORSO_FORWARD: "Leaning forward", ERR_TORSO_ROTATION: "Torso twisting", ERR_ARM_TO_SIDE: "Arm drifting out",
+  ERR_KNEES_INSIDE: "Knee valgus", ERR_TORSO_TO_SIDE: "Lateral trunk lean", ERR_SHALLOW_SQUAT: "Insufficient squat depth",
+  ERR_KNEES_FORWARD: "Excessive forward knee travel", ERR_LIFTED_HEELS: "Heel rise",
+  ERR_ARM_FORWARD: "Forward arm drift", ERR_ELEVATED_SHOULDER: "Scapular elevation (shrug)", ERR_HEAD_TO_SIDE: "Lateral head tilt",
+  ERR_LOW_ABDUCTION: "Limited abduction range", ERR_BENT_ARM: "Elbow not fully extended",
+  ERR_TORSO_FORWARD: "Forward trunk lean", ERR_TORSO_ROTATION: "Trunk rotation", ERR_ARM_TO_SIDE: "Arm drifting into abduction",
 };
-const EX_TITLES = { squat: "Bodyweight Squat", arm_abduction: "Shoulder Abduction", shoulder_extension: "Shoulder Extension" };
-const nice = (code) => LABELS[code] || code.replace(/^ERR_/, "").toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+const EX_TITLES = Object.fromEntries(REGIONS.flatMap((r) => r.exercises.map((e) => [e.ex, e.name])));
+const nice = (code) => model?.names?.[code] || LABELS[code] || code.replace(/^ERR_/, "").toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+const isRules = () => model?.type === "rules";
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 let currentEx = EXERCISES[0], source = "webcam", setSizeVal = 10;
@@ -72,23 +93,33 @@ async function loadLandmarker() {
 }
 
 async function loadModel(ex) {
-  model = await (await fetch(`models/rehab26_${ex}.json`)).json();
+  model = await (await fetch(MODEL_FILE(ex))).json();
+  if (model.type === "rules") model.classes = ["CORRECT", ...Object.keys(model.names)];
   seg = makeSegmenter(model.segmenter);
-  cal = new Calibrator(model.calibration);
+  cal = new Calibrator(model.calibration ?? { reps: 3, window: 20 });   // rule checks don't calibrate
   gate = new SetupGate(rulesFor(ex, mobility));
-  $("#howto").innerHTML = `${HOWTO[ex]}<br><br>${CALIBRATE}${mobilityNote()}`;
+  $("#howto").innerHTML = `${HOWTO[ex]}<br><br>${note()}${mobilityNote()}`;
   $("#expected").innerHTML = `<option value="">Not testing</option>` +
     model.classes.map((c) => `<option value="${c}">${esc(nice(c))}</option>`).join("");
   const m = model.metrics;
-  $("#modelInfo").textContent = `${EX_TITLES[ex]} model, trained on REHAB26-ViewAngles (${m.people} people, physiotherapist-labeled). ` +
-    `Detects: ${model.classes.filter((c) => c !== "CORRECT").map((c) => nice(c).toLowerCase()).join(", ")}. ` +
-    `On people it never saw, facing the camera: catches ${Math.round(m.mistakes_caught * 100)}% of mistakes, names the mistake ` +
-    `right ${Math.round(m.mistakes_named_right * 100)}% of the time, leaves ${Math.round(m.good_left_alone * 100)}% of good reps alone.`;
+  $("#modelInfo").textContent = model.type === "rules"
+    ? `${EX_TITLES[ex]}: rule checks with clinical thresholds (textbook range-of-motion norms and compensation limits), the ` +
+      `joint-angle approach of Adarsh & Francis (NCECA 2026). Checks: ${model.checks.map((c) => c.label.toLowerCase()).join(", ")}. ` +
+      `Tested on ${m.good_reps} reps from ${m.good_videos} videos that physiotherapists scored 90+ (MobiPhysio): ` +
+      `${Math.round(m.good_reps_pass * 100)}% pass every check. Not trained on labeled mistakes, so which mistake is named isn't validated.`
+    : `${EX_TITLES[ex]} model, trained on REHAB26-ViewAngles (${m.people} people, physiotherapist-labeled). ` +
+      `Detects: ${model.classes.filter((c) => c !== "CORRECT").map((c) => nice(c).toLowerCase()).join(", ")}. ` +
+      `On people it never saw, facing the camera: catches ${Math.round(m.mistakes_caught * 100)}% of mistakes, names the mistake ` +
+      `right ${Math.round(m.mistakes_named_right * 100)}% of the time, leaves ${Math.round(m.good_left_alone * 100)}% of good reps alone.`;
   $("#angleLabel").textContent = model.segmenter.mode === "tempo" ? "Next cue" : ANGLES[ex][ANGLES[ex].length - 1][0];
   $("#angle").textContent = "–";
   shownAngle = {}; smoothAngle = {};
   currentEx = ex;
-  document.querySelectorAll(".ex-card").forEach((c) => c.setAttribute("aria-checked", String(c.dataset.ex === ex)));
+  const f = findExercise(ex);
+  $("#sessRegion").textContent = f.item.tags.join(" · "); $("#backLabel").textContent = f.region.name;
+  $("#exTitle").textContent = f.item.name; $("#exTarget").textContent = `Targets: ${f.item.targets}`;
+  document.title = `${f.item.name} · Kinetix`;
+  $("#modelInfo").hidden = !TEST;
 }
 
 // ---------- feedback UI ----------
@@ -151,7 +182,7 @@ const hideSetup = () => { $("#setup").hidden = true; };
 function onPose(res, t) {
   const img = res.landmarks[0].map((l) => [l.x, l.y, l.visibility ?? 1]);
   const P = res.worldLandmarks[0].map((l) => [l.x, l.y, l.z]);
-  P.img = img; P.t = t; P.ok = framing(img).ok;
+  P.img = img; P.t = t; P.ok = framing(img).ok; P.aspect = (video.videoWidth || 16) / (video.videoHeight || 9);
 
   const hx = P[23][0] - P[24][0], hz = P[23][2] - P[24][2];
   facingHist.push(Math.atan2(Math.abs(hz), Math.abs(hx)) * 180 / Math.PI); if (facingHist.length > 30) facingHist.shift();
@@ -202,12 +233,19 @@ function onMovement(frames) {
   repCount++;
   $("#status").textContent = "";
 
-  // Feedback on every rep: the early model (change from the rep's own start) until we know this user's normal,
-  // then the calibrated model (compared with the user's own previous reps). Both run automatically.
-  const x = repFeatures(frames, model.feature_set);
+  // Feedback on every rep. Trained exercises: the early model (change from the rep's own start) until we know this
+  // user's normal, then the calibrated model (compared with the user's own previous reps). Rule-check exercises: each
+  // measured angle against its clinical limit; the most severe miss is named.
   const opts = MOBILITY[mobility];
-  const out = cal.ready ? decide(model, classify(model, frames, cal.center(), x), opts) : decide(model.early, classify(model.early, frames), opts);
-  learn(x, v.amp);
+  let out, ruleRows = null;
+  if (isRules()) {
+    const r = judgeRules(model, ruleValues(model, frames), mobility === "standard" ? null : opts);
+    out = { label: r.label }; ruleRows = r.rows;
+  } else {
+    const x = repFeatures(frames, model.feature_set);
+    out = cal.ready ? decide(model, classify(model, frames, cal.center(), x), opts) : decide(model.early, classify(model.early, frames), opts);
+    learn(x, v.amp);
+  }
   const good = out.label === "CORRECT", done = repCount === setSize();
   showCount(done ? "set complete ✓" : "");
   showChip(good ? `✓ Good form${done ? " · set complete" : ""}` : `${model.short[out.label]}${done ? " · set complete" : ""}`, good ? "good" : "bad");
@@ -221,13 +259,17 @@ function onMovement(frames) {
     $("#tally").textContent = `Test tally: exact ${tally.exact}/${tally.n} (${Math.round(100 * tally.exact / tally.n)}%), ` +
       `correct-vs-wrong ${tally.binary}/${tally.n} (${Math.round(100 * tally.binary / tally.n)}%)`;
   }
-  const bars = Object.entries(out.probs).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
+  const bars = ruleRows ? ruleRows.map((r) => {
+    const f = (x) => (r.unit === "°" ? `${Math.round(x)}°` : x.toFixed(2));
+    const target = r.lo != null && r.hi != null ? `${f(r.lo)}–${f(r.hi)}` : r.lo != null ? `≥ ${f(r.lo)}` : `≤ ${f(r.hi)}`;
+    return `<div class="check ${r.ok ? "ok" : "no"}"><span>${r.ok ? "✓" : "✗"}</span><span>${esc(r.label)}</span><span>${f(r.value)}</span><span>target ${target}</span></div>`;
+  }).join("") : Object.entries(out.probs).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
     `<div class="bar${i === 0 ? " top" : ""}"><span>${esc(nice(c))}</span><span><i style="width:${(p * 100).toFixed(0)}%"></i></span><span>${(p * 100).toFixed(0)}%</span></div>`).join("");
   const secs = ((frames[frames.length - 1].t - frames[0].t) / 1000).toFixed(1);
   $("#latest").innerHTML = `<div class="rep-meta">Rep ${repCount} · ${secs} s</div>
     <div class="verdict" style="color:var(${good ? "--good-text" : "--bad-text"})">${esc(nice(out.label))}</div>
     <div class="cue">${good ? "Nice work. Keep it up." : esc(cueFor(out.label))}</div>${tag}
-    <div class="rep-meta" style="margin:14px 0 8px">What the model saw</div><div class="bars">${bars}</div>`;
+    <div class="rep-meta" style="margin:14px 0 8px">${ruleRows ? "Your measurements" : "Form breakdown"}</div><div class="bars">${bars}</div>`;
   logRow(good ? "good" : "bad", repCount, nice(out.label), good ? "" : model.short[out.label], tag || `${secs} s`);
   // spoken feedback every rep: the count + "good", or the mistake with how to fix it
   const how = model.segmenter.mode === "tempo" ? "" : ` ${cueFor(out.label)}`;   // tempo: keep it short before the next cue
@@ -300,7 +342,9 @@ function drawAngles(world, px, W, H) {
   for (const [label, a, b, c] of ANGLES[model.exercise]) {
     const vis = smoothImg[a].v > 0.5 && smoothImg[b].v > 0.5 && smoothImg[c].v > 0.5;
     if (!vis) continue;
-    const u = world[a].map((v, i) => v - world[b][i]), w = world[c].map((v, i) => v - world[b][i]);
+    const asp = W / H, im = (i) => [smoothImg[i].x * asp, smoothImg[i].y, 0];
+    const pt = isRules() ? im : (i) => world[i];   // rule exercises: image-plane angles, like the checks
+    const u = pt(a).map((v, i) => v - pt(b)[i]), w = pt(c).map((v, i) => v - pt(b)[i]);
     const deg = Math.acos(Math.max(-1, Math.min(1, (u[0] * w[0] + u[1] * w[1] + u[2] * w[2]) / (Math.hypot(...u) * Math.hypot(...w) + 1e-9)))) * 180 / Math.PI;
     smoothAngle[label] = smoothAngle[label] === undefined ? deg : smoothAngle[label] + 0.2 * (deg - smoothAngle[label]);
     const s = smoothAngle[label];
@@ -312,7 +356,7 @@ function drawAngles(world, px, W, H) {
     const A = { x: smoothImg[a].x * W, y: smoothImg[a].y * H }, C = { x: smoothImg[c].x * W, y: smoothImg[c].y * H };
     const a1 = Math.atan2(A.y - B.y, A.x - B.x), a2 = Math.atan2(C.y - B.y, C.x - B.x);
     let d = a2 - a1; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
-    ctx.strokeStyle = "rgba(96, 165, 250, 0.95)"; ctx.lineWidth = px(3);
+    ctx.strokeStyle = "rgba(134, 214, 150, 0.95)"; ctx.lineWidth = px(3);
     ctx.beginPath(); ctx.arc(B.x, B.y, px(26), a1, a1 + d, d < 0); ctx.stroke();
 
     // label sits beside the joint on the outside of the body, clear of the face and torso
@@ -324,7 +368,7 @@ function drawAngles(world, px, W, H) {
     ctx.translate(lx, ly); if (mirrored) ctx.scale(-1, 1);   // keep text readable when the webcam view is mirrored
     ctx.font = `600 ${px(15)}px "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
     const tw = ctx.measureText(text).width, bw = tw + px(18), bh = px(26);
-    ctx.fillStyle = "rgba(37, 99, 235, 0.92)";
+    ctx.fillStyle = "rgba(47, 129, 64, 0.94)";
     ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, px(13)); ctx.fill();
     ctx.fillStyle = "#ffffff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, 0, px(1));
     ctx.restore();
@@ -364,9 +408,9 @@ async function start() {
     $("#start").disabled = true;
     speak("Starting");                     // spoken inside the click, which also unlocks audio in the browser
     await loadLandmarker();
-    seg.reset(); gate.reset(); cal = new Calibrator(model.calibration); calAmps = [];
+    seg.reset(); gate.reset(); cal = new Calibrator(model.calibration ?? { reps: 3, window: 20 }); calAmps = [];
     phase = "setup"; outFrames = 0; repCount = 0; lastTime = -1; facingHist = []; smoothImg = null; shownAngle = {}; smoothAngle = {};
-    $("#latest").innerHTML = `<div class="muted">${CALIBRATE}</div>`;
+    $("#latest").innerHTML = `<div class="muted">${note()}</div>`;
     showCount("get into position"); resetLog(); lastSetupSpoken = ""; lastSetupAt = 0;
     $("#idle").hidden = true; $("#counter").hidden = false; $("#stage").classList.add("live");
     if (source === "webcam") {
@@ -394,12 +438,51 @@ function stop() {
   $("#start").disabled = false; $("#stop").disabled = true;
 }
 
+// ---------- exercise library: body region -> exercises -> session (#/<region>/<exercise>) ----------
+function renderRegions() {
+  $("#regions").innerHTML = REGIONS.map((r) => {
+    const live = r.exercises.filter((e) => !e.soon).length, soon = r.exercises.length - live;
+    const n = (k) => `${k} exercise${k === 1 ? "" : "s"}`;
+    const count = live ? `${n(live)}${soon ? ` <span>· ${soon} coming soon</span>` : ""}` : `${n(soon)} <span>· coming soon</span>`;
+    return `<button class="region" data-region="${r.id}"><span class="region-art">${regionArt(r.id)}</span>
+      <span class="region-name">${esc(r.name)}</span><span class="region-desc">${esc(r.desc)}</span>
+      <span class="region-foot"><span class="region-count">${count}</span><span class="go">${ARROW}</span></span></button>`;
+  }).join("");
+}
+function renderExercises(r) {
+  $("#regionBadge").innerHTML = regionArt(r.id);
+  $("#regionTitle").textContent = r.name; $("#regionLede").textContent = r.lede;
+  $("#exList").innerHTML = r.exercises.map((e) => `<button class="ex-card${e.soon ? " soon" : ""}" data-ex="${e.ex}"${e.soon ? ' aria-disabled="true" tabindex="-1"' : ""}>
+      <span class="ex-icon">${e.icon}</span>
+      <span class="ex-text"><span class="ex-top"><span class="ex-name">${esc(e.name)}</span>${e.soon ? '<span class="soon-tag">Coming soon</span>' : `<span class="start-tag">Start ${ARROW}</span>`}</span>
+        <span class="ex-target">Targets: ${esc(e.targets)}</span><span class="ex-why">${esc(e.why)}</span>
+        <span class="ex-meta">${e.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</span></span></button>`).join("");
+}
+const VIEWS = ["viewRegions", "viewExercises", "viewSession"];
+const showView = (id) => VIEWS.forEach((v) => { $("#" + v).hidden = v !== id; });
+async function route() {
+  const [regionId, ex] = location.hash.replace(/^#\/?/, "").split("/");
+  const region = REGIONS.find((r) => r.id === regionId), found = ex ? findExercise(ex) : null;
+  if (found && !found.item.soon) {
+    if (found.item.ex !== currentEx || !model) { stop(); hideSetup(); await loadModel(found.item.ex); }
+    showView("viewSession");
+  } else {
+    if (running) { stop(); $("#status").textContent = ""; }
+    if (region) { renderExercises(region); showView("viewExercises"); } else showView("viewRegions");
+  }
+  window.scrollTo(0, 0);
+}
+$("#regions").addEventListener("click", (e) => { const b = e.target.closest(".region"); if (b) location.hash = `#/${b.dataset.region}`; });
+$("#exList").addEventListener("click", (e) => {
+  const b = e.target.closest(".ex-card"); if (!b || b.classList.contains("soon")) return;
+  location.hash = `#/${findExercise(b.dataset.ex).region.id}/${b.dataset.ex}`;
+});
+$("#backToRegions").onclick = () => { location.hash = "#/"; };
+$("#backToExercises").onclick = () => { location.hash = `#/${findExercise(currentEx).region.id}`; };
+window.addEventListener("hashchange", route);
+
 // ---------- controls ----------
 const pressed = (group, btn) => group.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
-document.querySelectorAll(".ex-card").forEach((card) => card.addEventListener("click", () => {
-  if (card.dataset.ex === currentEx) return;
-  stop(); hideSetup(); loadModel(card.dataset.ex);
-}));
 $("#setSizeSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   setSizeVal = Number(b.dataset.n); pressed($("#setSizeSeg"), b); showCount($("#countSub").textContent);
@@ -442,7 +525,7 @@ function setMobility(m) {
   try { localStorage.setItem("formcheck.mobility", mobility); } catch (e) { /* storage blocked */ }
   pressed($("#mobilitySeg"), $(`#mobilitySeg [data-m="${mobility}"]`));
   if (gate) gate.rules = rulesFor(currentEx, mobility);   // applies right away, even mid-session
-  if (model) $("#howto").innerHTML = `${HOWTO[currentEx]}<br><br>${CALIBRATE}${mobilityNote()}`;
+  if (model) $("#howto").innerHTML = `${HOWTO[currentEx]}<br><br>${note()}${mobilityNote()}`;
 }
 $("#mobilitySeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMobility(b.dataset.m); });
 
@@ -450,15 +533,15 @@ $("#start").onclick = start;
 $("#stop").onclick = () => { stop(); $("#status").textContent = "Stopped."; };
 $("#resetTally").onclick = () => { tally = { n: 0, exact: 0, binary: 0 }; $("#tally").textContent = ""; };
 
-// Optional URL parameters for quick tests: ?ex=squat&video=testvideos/clip.mp4&expected=CORRECT&autostart=1
-const params = new URLSearchParams(location.search);
-const ex0 = EXERCISES.includes(params.get("ex")) ? params.get("ex") : EXERCISES[0];
-await loadModel(ex0);
+// ?ex=<exercise> opens that exercise's session directly (used by the tests)
+const exParam = params.get("ex") && findExercise(params.get("ex"));
+if (exParam && !exParam.item.soon) history.replaceState(null, "", `${location.pathname}${location.search}#/${exParam.region.id}/${exParam.item.ex}`);
+renderRegions();
+await route();
 setMobility(params.get("mobility") || mobility);
 showCount("");
 if (params.get("video")) { setSource("file"); $("#fileName").textContent = params.get("video").split("/").pop(); }
 // The model detects the mistake type by itself. The "I'm doing…" selector is only a testing aid (?test=1).
-const TEST = params.has("test") || params.has("expected");
 $("#testWrap").hidden = !TEST; $("#resetTally").hidden = !TEST;
 if (params.get("expected")) $("#expected").value = params.get("expected");
 if (params.get("autostart")) start();

@@ -1,0 +1,127 @@
+{
+ "type": "rules",
+ "exercise": "shoulder_abduction_full",
+ "title": "Shoulder Abduction AROM",
+ "side": "right",
+ "segmenter": {
+  "mode": "auto",
+  "minFrames": 18,
+  "maxFrames": 300,
+  "pad": 6,
+  "calibFrames": 8,
+  "history": 150,
+  "start": 35,
+  "end": 20,
+  "rest": 10,
+  "restIs": "min",
+  "primary": "img:arm_raise"
+ },
+ "primary": "arm_raise",
+ "minAmp": 60,
+ "checks": [
+  {
+   "id": "arm_raise@peak",
+   "signal": "arm_raise",
+   "stat": "peak",
+   "kind": "rom",
+   "min": 150,
+   "max": null,
+   "code_low": "ERR_LOW_RAISE",
+   "code_high": null,
+   "scale": 10,
+   "rest": 0,
+   "basis": "AAOS normal shoulder abduction 0-180 deg; 150+ counts as reaching overhead",
+   "label": "Shoulder elevation",
+   "unit": "\u00b0"
+  },
+  {
+   "id": "elbow@peak",
+   "signal": "elbow",
+   "stat": "peak",
+   "kind": "form",
+   "min": 150,
+   "max": null,
+   "code_low": "ERR_BENT_ELBOW",
+   "code_high": null,
+   "scale": 10,
+   "rest": 0,
+   "basis": "straight arm: elbow within 30 deg of full extension",
+   "label": "Elbow angle",
+   "unit": "\u00b0"
+  },
+  {
+   "id": "trunk_lean@drift",
+   "signal": "trunk_lean",
+   "stat": "drift",
+   "kind": "comp",
+   "min": null,
+   "max": 10,
+   "code_low": null,
+   "code_high": "ERR_TRUNK_LEAN",
+   "scale": 10,
+   "rest": 0,
+   "basis": "trunk side lean under 10 deg (trunk lean is the usual compensation for limited shoulder range)",
+   "label": "Lateral trunk lean",
+   "unit": "\u00b0"
+  }
+ ],
+ "cues": {
+  "ERR_BENT_ELBOW": "Keep your elbow straight.",
+  "ERR_LOW_RAISE": "Raise your arm higher, all the way up beside your ear, if it's comfortable.",
+  "ERR_TRUNK_LEAN": "Keep your trunk upright; don't lean to the side."
+ },
+ "short": {
+  "ERR_BENT_ELBOW": "Straight elbow",
+  "ERR_LOW_RAISE": "Higher",
+  "ERR_TRUNK_LEAN": "Stay upright"
+ },
+ "names": {
+  "ERR_BENT_ELBOW": "Elbow not fully extended",
+  "ERR_LOW_RAISE": "Limited abduction range",
+  "ERR_TRUNK_LEAN": "Lateral trunk lean"
+ },
+ "metrics": {
+  "good_videos": 36,
+  "poor_videos": 58,
+  "videos_without_reps": 9,
+  "people": 24,
+  "good_reps": 399,
+  "good_reps_pass": 0.794,
+  "good_reps_flagged_by_check": {
+   "arm_raise@peak": 0.065,
+   "elbow@peak": 0.073,
+   "trunk_lean@drift": 0.098
+  },
+  "poor_reps": 589,
+  "poor_reps_flagged": 0.115,
+  "flags_on_good": {
+   "ERR_TRUNK_LEAN": 39,
+   "ERR_LOW_RAISE": 23,
+   "ERR_BENT_ELBOW": 20
+  },
+  "flags_on_poor": {
+   "ERR_TRUNK_LEAN": 37,
+   "ERR_LOW_RAISE": 25,
+   "ERR_BENT_ELBOW": 6
+  },
+  "reps_per_video": 10.0,
+  "measured_on_good": {
+   "arm_raise@peak": [
+    137.97,
+    173.75,
+    179.72
+   ],
+   "elbow@peak": [
+    136.21,
+    167.86,
+    178.74
+   ],
+   "trunk_lean@drift": [
+    0.8,
+    2.73,
+    14.4
+   ]
+  }
+ },
+ "source": "Clinical thresholds (AAOS / Norkin & White norms, common compensation limits); false alarms measured on MobiPhysio videos physiotherapists scored >= 90 (Iqbal et al., Harvard Dataverse 2025, CC0)"
+}
