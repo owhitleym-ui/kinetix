@@ -12,7 +12,7 @@ const FEMALE_VOICE = "nova";
 /** Playback loudness multiplier (1 = normal; 2-2.5 feels much clearer on laptop speakers). */
 const PLAYBACK_GAIN = 2.35;
 
-const CACHE_MAX = 80;
+const CACHE_MAX = 120;
 
 let currentAudio = null;
 let objectUrl = null;

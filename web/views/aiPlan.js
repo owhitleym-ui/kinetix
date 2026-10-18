@@ -1,7 +1,11 @@
 // T3 · AI plan review: every suggestion shows its evidence; nothing reaches the patient until the PT approves.
 import { EFFORT_FACES, ICON, esc, face, ring, toast } from "../ui.js";
 import { doseShort, exName } from "../exerciseText.js";
-import { approveDraft, decideSuggestion, getDraft, setDraftMessage, undoDecision } from "../data.js";
+import {
+  approveDraft, decideSuggestion, getDraft, publishPlanReportToPatient,
+  setDraftMessage, undoDecision, userRecord,
+} from "../data.js";
+import { downloadReport, printReport, snapshotFromDraft } from "../report.js";
 import { renderPage, stubPage } from "./chrome.js";
 import { go } from "../router.js";
 
@@ -13,6 +17,12 @@ export async function aiPlanRoute({ user, params }) {
   if (!d) { stubPage("This plan draft has already been handled", { active: "drafts", user }); return; }
   const first = d.patient.first;
   const editing = new Set();
+  let menuOpen = false;
+
+  const makeSnapshot = () => snapshotFromDraft(d, {
+    ptId,
+    ptName: userRecord(ptId)?.name || user.name || "Your PT",
+  });
 
   const card = (s) => {
     const dec = d.decisions[s.id], st = dec?.state;
@@ -57,10 +67,22 @@ export async function aiPlanRoute({ user, params }) {
           <section class="card bordered stack" style="padding:20px;gap:10px">
             <label for="ptMsg" style="font-size:1rem;font-weight:700">Message to patient</label><span class="muted" style="font-size:.8125rem">AI draft · edit before sending</span>
             <div class="field"><textarea id="ptMsg" rows="5">${esc(d.message)}</textarea></div></section>
-          <button type="button" class="btn ${decided === n ? "btn-primary " : ""}md block" data-approve aria-disabled="${decided !== n}">Approve &amp; send plan</button>
-          <span class="muted" style="font-size:.8125rem;text-align:center">${decided === n ? `${esc(first)} sees the new plan on their Today screen.` : "Accept, edit or dismiss every suggestion to approve."}</span>
+          <div class="report-actions stack" style="gap:8px">
+            <div class="report-menu-wrap">
+              <button type="button" class="btn btn-secondary md block" data-report-menu aria-expanded="${menuOpen}" aria-haspopup="menu">Print report summary</button>
+              <div class="report-menu" role="menu" ${menuOpen ? "" : "hidden"}>
+                <button type="button" role="menuitem" data-print-pdf>Print / Save as PDF</button>
+                <button type="button" role="menuitem" data-download-report>Download &amp; save</button>
+                <button type="button" role="menuitem" data-publish-report>Publish to patient</button>
+              </div>
+            </div>
+            <button type="button" class="btn ${decided === n ? "btn-primary " : ""}md block" data-approve aria-disabled="${decided !== n}">Approve &amp; send plan</button>
+            <span class="muted" style="font-size:.8125rem;text-align:center">${decided === n ? `${esc(first)} sees the new plan on their Today screen.` : "Accept, edit or dismiss every suggestion to approve."}</span>
+            <span class="muted" style="font-size:.75rem;text-align:center">Publish sends “Access your report” in Messages without changing their active plan.</span>
+          </div>
         </aside>
       </div>`, { active: "drafts", user, title: `Review ${first}’s plan` });
+
     const approve = root.querySelector("[data-approve]");
     const decide = (id, state, edits) => { decideSuggestion(d.id, id, state, edits); d.decisions[id] = { state, edits: edits || null }; editing.delete(id); render(); };
     root.querySelectorAll("[data-accept]").forEach((b) => b.addEventListener("click", () => decide(b.dataset.accept, "ok")));
@@ -73,6 +95,41 @@ export async function aiPlanRoute({ user, params }) {
       decide(f.dataset.editform, "ok", { sets: Math.max(1, Number(fd.get("sets")) || 1), reps: Math.max(1, Number(fd.get("reps")) || 1), tempo: fd.get("tempo"), cue: String(fd.get("cue") || "").trim() });
     }));
     root.querySelector("#ptMsg").addEventListener("input", (e) => { d.message = e.target.value; setDraftMessage(d.id, d.message); });
+
+    const menuBtn = root.querySelector("[data-report-menu]");
+    const menu = root.querySelector(".report-menu");
+    menuBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menuOpen = !menuOpen;
+      menu.hidden = !menuOpen;
+      menuBtn.setAttribute("aria-expanded", String(menuOpen));
+    });
+    root.querySelector("[data-print-pdf]")?.addEventListener("click", () => {
+      menuOpen = false;
+      const snap = makeSnapshot();
+      const r = printReport(snap);
+      if (!r.ok) toast("Allow pop-ups to print or save as PDF.");
+      else toast("Use your printer dialog → Save as PDF.");
+      render();
+    });
+    root.querySelector("[data-download-report]")?.addEventListener("click", () => {
+      menuOpen = false;
+      downloadReport(makeSnapshot());
+      toast("Report downloaded.");
+      render();
+    });
+    root.querySelector("[data-publish-report]")?.addEventListener("click", () => {
+      menuOpen = false;
+      const published = publishPlanReportToPatient({ ptId, report: makeSnapshot() });
+      if (!published) {
+        toast("Couldn’t publish. Check that this patient is on your care team.");
+        render();
+        return;
+      }
+      toast(`Report sent to ${first}’s Messages.`);
+      go(`#/provider/messages?with=${encodeURIComponent(d.patientId)}`);
+    });
+
     approve.addEventListener("click", async () => {
       if (decided !== n) { toast("Review every suggestion first."); return; }
       approve.disabled = true;

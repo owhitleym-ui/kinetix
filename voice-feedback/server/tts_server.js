@@ -46,14 +46,13 @@ const app = express();
 const PORT = Number(process.env.TTS_PORT || 3002);
 const MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
 const VOICE = process.env.OPENAI_TTS_VOICE || "nova";
-const SPEED = Number(process.env.OPENAI_TTS_SPEED || "1.08");
+const SPEED = Number(process.env.OPENAI_TTS_SPEED || "0.92");
 const INSTRUCTIONS = process.env.OPENAI_TTS_INSTRUCTIONS || [
-  "You are an upbeat female physical therapy coach speaking to someone mid-workout.",
-  "Sound warm, encouraging, and human — not flat or robotic.",
-  "Use natural energy and prosody: vary pitch and emphasis like a real person.",
-  "For praise, sound genuinely happy and lively.",
-  "For form tips, sound caring and clear, still energetic, never scolding.",
-  "Speak at a confident conversational pace with light smile in the voice.",
+  "You are a warm female physical therapy coach speaking to someone mid-workout.",
+  "Speak at a natural conversational pace — clear, friendly, and human, never rushed.",
+  "Use gentle pitch variation and prosody like a real person — not flat or robotic.",
+  "For praise, sound sincerely encouraging.",
+  "For form tips, sound caring and clear, never scolding.",
 ].join(" ");
 
 const origins = (process.env.CORS_ORIGINS || "http://127.0.0.1:8801,http://localhost:8801")

@@ -289,7 +289,7 @@ export function threadsFor(userId) {
     return (a.counterpart?.name || "").localeCompare(b.counterpart?.name || "");
   });
 }
-export function sendMessage({ from, patientId, ptId, text }) {
+export function sendMessage({ from, patientId, ptId, text, kind = null, reportId = null }) {
   const body = (text || "").trim();
   if (!body || !from || !patientId || !ptId) return null;
   if (!canMessage(from, from === patientId ? ptId : patientId)) return null;
@@ -299,9 +299,48 @@ export function sendMessage({ from, patientId, ptId, text }) {
     at: new Date().toISOString(),
     readAt: null,
   };
+  if (kind) msg.kind = kind;
+  if (reportId) msg.reportId = reportId;
   allMessages().push(msg);
   save();
   return msg;
+}
+
+function allReports() {
+  const d = store();
+  if (!d.reports || typeof d.reports !== "object") d.reports = {};
+  return d.reports;
+}
+
+export function getPlanReport(id) {
+  if (!id) return null;
+  return allReports()[id] || null;
+}
+
+/** Persist a report snapshot (print / publish). */
+export function savePlanReport(report) {
+  if (!report?.id) return null;
+  allReports()[report.id] = report;
+  save();
+  return report;
+}
+
+/**
+ * Publish plan report to the patient Messages inbox with an "Access your report" CTA.
+ * Does not approve the plan by itself (PT can still Approve & send separately).
+ */
+export function publishPlanReportToPatient({ ptId, report }) {
+  if (!ptId || !report?.patientId || !report?.id) return null;
+  savePlanReport(report);
+  const msg = sendMessage({
+    from: ptId,
+    patientId: report.patientId,
+    ptId,
+    text: "Your plan report is ready. Access your report here.",
+    kind: "plan_report",
+    reportId: report.id,
+  });
+  return msg ? report : null;
 }
 /** Mark messages in the thread as read for the viewer (messages they did not send). */
 export function markThreadRead(viewerId, patientId, ptId) {

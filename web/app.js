@@ -230,13 +230,16 @@ function flushSpeakLatest() {
   if (next) speakNatural(next, { voice: FEMALE_VOICE, interrupt: true });
 }
 
+/** Hardcoded good-rep lines — rotated to feel natural without GenAI latency. */
 const GOOD_EXTRAS = [
-  "Keep it up!",
-  "Nice work!",
+  "Great form. Keep it up!",
+  "Nice work. That looked solid.",
   "That's the one. Keep going!",
-  "Looking strong!",
-  "Great form. Stay with it!",
+  "Looking strong. Stay with it!",
+  "Beautiful. Keep that control.",
   "You've got this. Keep it up!",
+  "Good form. Nice and steady.",
+  "Well done. Same again next rep.",
 ];
 let goodExtraIdx = 0;
 function nextGoodExtra() {
@@ -245,27 +248,150 @@ function nextGoodExtra() {
   return line;
 }
 
-/** Friendly coaching sentences for spoken feedback (UI can still show short cues). */
+/**
+ * Hardcoded mistake coaching lines (arrays rotate). Spoken after each bad rep.
+ * UI can still show the short cue; speech uses these fuller sentences.
+ */
 const COACH_SAY = {
-  ERR_KNEES_INSIDE: "You might want to push your knees out a bit more on the next rep, so they track over your toes.",
-  ERR_KNEES_FORWARD: "Try sitting back into your hips a little more next time, so your knees stay behind your toes.",
-  ERR_LIFTED_HEELS: "See if you can keep your heels planted on the floor for the next rep.",
-  ERR_SHALLOW_SQUAT: "You might want to go a little deeper next rep. Sit back until your thighs are near parallel.",
-  ERR_TORSO_TO_SIDE: "Try to keep your torso centered next time. Avoid leaning to one side.",
-  ERR_ARM_FORWARD: "On the next rep, raise your arm out to the side in line with your body, not out in front.",
-  ERR_BENT_ARM: "You might want to keep your elbow a bit straighter on the next rep.",
-  ERR_ELEVATED_SHOULDER: "Try keeping that shoulder down next time. No shrug.",
-  ERR_HEAD_TO_SIDE: "See if you can keep your head straight on the next rep, without tilting.",
-  ERR_LOW_ABDUCTION: "You might want to lift your arm a little higher next time, at least to shoulder level.",
-  ERR_ARM_TO_SIDE: "On the next rep, move your arm straight back, close to your body.",
-  ERR_TORSO_FORWARD: "Try keeping your torso upright next time. Avoid bending forward.",
-  ERR_TORSO_ROTATION: "See if you can keep your chest facing forward on the next rep, without twisting.",
+  ERR_KNEES_INSIDE: [
+    "Try to keep your knees out a bit more next time.",
+    "Push your knees out a little on the next rep, so they track over your toes.",
+    "Next rep, open those knees outward as you sit down.",
+  ],
+  ERR_KNEES_FORWARD: [
+    "Try sitting back into your hips a bit more next time.",
+    "Keep your knees behind your toes on the next rep. Sit back a little.",
+    "Next time, shift your weight into your hips so your knees don’t shoot forward.",
+  ],
+  ERR_LIFTED_HEELS: [
+    "Try to keep your heels down a bit more next time.",
+    "Press through your whole foot on the next rep. Heels stay planted.",
+    "Next time, keep those heels glued to the floor.",
+  ],
+  ERR_SHALLOW_SQUAT: [
+    "Try to go a little deeper next time.",
+    "Sit a bit lower on the next rep, until your thighs are closer to parallel.",
+    "Next time, take it a touch deeper if that feels comfortable.",
+  ],
+  ERR_TORSO_TO_SIDE: [
+    "Try to keep your body centered next time. Don’t lean to one side.",
+    "Stay tall and even on the next rep. Avoid tipping sideways.",
+    "Next time, keep your torso stacked over your hips.",
+  ],
+  ERR_TRUNK_LEAN: [
+    "Try to keep your body straight next time. Don’t lean as you lift.",
+    "Stand tall on the next rep. Avoid tipping to the side.",
+    "Next time, keep your ribs stacked over your hips.",
+  ],
+  ERR_ARM_FORWARD: [
+    "Try lifting out to the side next time, not out in front.",
+    "On the next rep, raise your arm in line with your body.",
+    "Next time, sweep the arm sideways rather than forward.",
+  ],
+  ERR_BENT_ARM: [
+    "Try to keep your elbow a bit straighter next time.",
+    "Reach long through your fingers on the next rep. Soft elbow, not bent.",
+    "Next time, straighten that arm a little more as you lift.",
+  ],
+  ERR_BENT_ELBOW: [
+    "Try to keep your elbow a bit straighter next time.",
+    "Reach long through your arm on the next rep.",
+    "Next time, straighten the elbow a little more.",
+  ],
+  ERR_ELEVATED_SHOULDER: [
+    "Try keeping that shoulder down a bit more next time. No shrug.",
+    "Relax the shoulder on the next rep. Keep it away from your ear.",
+    "Next time, slide that shoulder blade down as you move.",
+  ],
+  ERR_HEAD_TO_SIDE: [
+    "Try to keep your head straight next time.",
+    "Eyes forward, chin level on the next rep.",
+    "Next time, avoid tilting your head to the side.",
+  ],
+  ERR_LOW_ABDUCTION: [
+    "Try lifting a little higher next time, toward shoulder height.",
+    "Raise the arm a bit more on the next rep if it feels okay.",
+    "Next time, aim a touch higher with that lift.",
+  ],
+  ERR_LOW_RAISE: [
+    "Try lifting a little higher next time.",
+    "Reach up a bit more on the next rep, beside your ear if you can.",
+    "Next time, take the arm a little higher through the range.",
+  ],
+  ERR_ARM_TO_SIDE: [
+    "Try moving straight back next time, close to your side.",
+    "Keep the arm near your body on the next rep. Straight back, not out.",
+    "Next time, glide the arm back without drifting sideways.",
+  ],
+  ERR_TORSO_FORWARD: [
+    "Try keeping your chest up a bit more next time.",
+    "Stand tall on the next rep. Avoid folding forward.",
+    "Next time, keep your torso upright as you move.",
+  ],
+  ERR_TORSO_ROTATION: [
+    "Try keeping your chest facing forward next time.",
+    "Don’t twist on the next rep. Square your shoulders to the camera.",
+    "Next time, keep your ribs facing straight ahead.",
+  ],
+  ERR_NOT_ACROSS: [
+    "Try reaching a bit further across next time.",
+    "Bring your hand toward the other side a little more on the next rep.",
+    "Next time, take the arm further across your body if it feels okay.",
+  ],
+  ERR_LOW_ROTATION: [
+    "Try rotating a little further next time.",
+    "Turn a bit more through the range on the next rep.",
+    "Next time, add a touch more rotation if it’s comfortable.",
+  ],
+  ERR_ELBOW_ANGLE: [
+    "Try keeping a right angle at your elbow next time.",
+    "Forearm straight forward to start on the next rep.",
+    "Next time, check that ninety-degree bend at the elbow.",
+  ],
+  ERR_ELBOW_DROP: [
+    "Try keeping your elbow up at shoulder height next time.",
+    "Hold the elbow level on the next rep. Don’t let it drop.",
+    "Next time, keep that elbow floating at shoulder height.",
+  ],
+  ERR_ELBOW_HIGH: [
+    "Try lowering your elbow a little next time, to shoulder height.",
+    "Bring the elbow down a touch on the next rep.",
+    "Next time, keep the elbow level with your shoulder, not above.",
+  ],
+  ERR_SMALL_CIRCLE: [
+    "Try making bigger circles next time.",
+    "Reach up overhead a bit more on each circle next rep.",
+    "Next time, draw a larger arc with your arm.",
+  ],
+  TOO_FAST: [
+    "Try slowing down a bit next time.",
+    "Take about three seconds each way on the next rep.",
+    "Next time, move a little slower and stay in control.",
+  ],
 };
 
+const coachSayIdx = Object.create(null);
 function coachSentence(label, fallbackCue) {
-  if (COACH_SAY[label]) return COACH_SAY[label];
-  if (fallbackCue) return `For the next rep, ${fallbackCue.charAt(0).toLowerCase()}${fallbackCue.slice(1).replace(/\.$/, "")}.`;
-  return `You might want to adjust your form a little on the next rep.`;
+  const opts = COACH_SAY[label];
+  if (Array.isArray(opts) && opts.length) {
+    const i = coachSayIdx[label] || 0;
+    coachSayIdx[label] = (i + 1) % opts.length;
+    return opts[i];
+  }
+  if (typeof opts === "string") return opts;
+  if (fallbackCue) {
+    const tip = fallbackCue.replace(/\.$/, "");
+    return `Try to ${tip.charAt(0).toLowerCase()}${tip.slice(1)} a bit more next time.`;
+  }
+  return "Try to adjust your form a little on the next rep.";
+}
+
+/** All hardcoded coach lines (for TTS prefetch / lower latency). */
+function allCoachWarmPhrases() {
+  return [
+    ...GOOD_EXTRAS,
+    ...Object.values(COACH_SAY).flat(),
+  ];
 }
 
 function showCount(sub = "") {
@@ -474,10 +600,10 @@ function onMovement(frames) {
     exercise: model.exercise,
   });
 
-  // Short spoken cues; coalesce so fast reps jump to the latest without chopping every line.
+  // Hardcoded rotating coach lines (no GenAI) — prefetched via warmPhrases for low latency.
   const spoken = good
-    ? `${repCount}. Good.`
-    : `${repCount}. ${model.short[out.label] || fixCue || "Adjust form."}`;
+    ? nextGoodExtra()
+    : coachSentence(out.label, model.short[out.label] || fixCue);
   if (done) {
     flushSpeakLatest();
     speak(spoken, { interrupt: true });
@@ -971,11 +1097,11 @@ async function start({ quiet = false } = {}) {
     $("#start").disabled = true;
     paused = false;
     // Welcome plays only on the first Start of a session (click also unlocks audio in the browser).
-    // Prefetch common short cues in the background so later reps skip the TTS round-trip.
+    // Prefetch rotating coach lines so reps hit the TTS cache (low latency).
     warmPhrases([
       "Go",
       "Paused. Step back into the frame.",
-      ...Array.from({ length: 20 }, (_, i) => `${i + 1}. Good.`),
+      ...allCoachWarmPhrases(),
     ]);
     const welcome = sessionWelcomeLine();
     if (!quiet) {

@@ -12,6 +12,7 @@ import { aiPlanRoute } from "./aiPlan.js";
 import { providerSettingsRoute } from "./providerSettings.js";
 import { progressRoute } from "./progress.js";
 import { messagesRoute } from "./messages.js";
+import { planReportRoute } from "./planReport.js";
 
 /** Patients get their own text size everywhere; everyone else sees the default. */
 export function applyUserPrefs(user) {
@@ -24,11 +25,13 @@ route("/signin", page(signinRoute));
 route("/patient", page(patientHomeRoute), { role: "patient" });
 route("/patient/progress", page(progressRoute), { role: "patient" });
 route("/patient/messages", page(messagesRoute), { role: "patient" });
+route("/patient/report/:reportId", page(planReportRoute), { role: "patient" });
 route("/patient/summary", page(summaryRoute), { role: "patient" });
 route("/patient/settings", page(patientSettingsRoute), { role: "patient" });
 route("/provider", page(caseloadRoute), { role: "pt" });
 route("/provider/drafts", page(draftsRoute), { role: "pt" });
 route("/provider/messages", page(messagesRoute), { role: "pt" });
+route("/provider/report/:reportId", page(planReportRoute), { role: "pt" });
 route("/provider/patient/:id", page(patientDetailRoute), { role: "pt" });
 route("/provider/plan/:draftId", page(aiPlanRoute), { role: "pt" });
 route("/provider/settings", page(providerSettingsRoute), { role: "pt" });

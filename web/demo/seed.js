@@ -193,7 +193,7 @@ export function buildSeed(now = Date.now()) {
   settings[PT_ID] = defaultPtSettings();
   sessions.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   const messages = buildMessages(now);
-  return { version: 1, seededAt: new Date(now).toISOString(), users, careTeam, profiles, plans, sessions, settings, drafts: {}, messages };
+  return { version: 1, seededAt: new Date(now).toISOString(), users, careTeam, profiles, plans, sessions, settings, drafts: {}, messages, reports: {} };
 }
 
 /** A few care-team threads so the Messages inbox isn’t empty in the demo. */

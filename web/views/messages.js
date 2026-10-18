@@ -110,8 +110,14 @@ function renderThread(user, counterpartId) {
           ${msgs.length
             ? msgs.map((m) => {
               const mine = m.from === user.dataId;
-              return `<div class="msg-bubble ${mine ? "me" : "them"}">
+              const reportHref = m.kind === "plan_report" && m.reportId
+                ? (user.role === "pt"
+                  ? `#/provider/report/${encodeURIComponent(m.reportId)}`
+                  : `#/patient/report/${encodeURIComponent(m.reportId)}`)
+                : null;
+              return `<div class="msg-bubble ${mine ? "me" : "them"}${reportHref ? " has-report" : ""}">
                 <p>${esc(m.text)}</p>
+                ${reportHref ? `<a class="btn ${mine ? "btn-secondary" : "btn-primary"} sm msg-report-cta" href="${reportHref}">Access your report</a>` : ""}
                 <time class="msg-meta" datetime="${esc(m.at)}">${esc(msgTime(m.at))}</time>
               </div>`;
             }).join("")
