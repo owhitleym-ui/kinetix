@@ -7,7 +7,7 @@ import { MOBILITY, SetupGate, framing, rulesFor, validateRep } from "./session.j
 import * as sessionMemory from "./sessionMemory.js";
 import { fetchChat, fetchSummary } from "./coach.js";
 import { ensureMicPermission, listen as listenSpeech, supported as speechSupported } from "./speechInput.js";
-import { speakNatural, stopNatural, ttsHealth, FEMALE_VOICE } from "./naturalSpeak.js";
+import { speakNatural, stopNatural, ttsHealth, warmPhrases, FEMALE_VOICE } from "./naturalSpeak.js";
 import { startAtpSession, logAtpRep, endAtpSession } from "./atpClient.js";
 import { judgeRules, ruleValues } from "./rules.js";
 import { ARROW, REGIONS, findExercise, regionArt } from "./catalog.js";
@@ -184,13 +184,51 @@ async function loadModel(ex) {
 
 // ---------- feedback UI ----------
 // OpenAI neural TTS only (female voice). Queued so lines never overlap. No browser speechSynthesis.
-function speak(text, { interrupt = false } = {}) {
+let speakLatestTimer = null;
+let speakLatestLine = "";
+
+function speak(text, { interrupt = false, dropIfBusy = false } = {}) {
   if (!$("#voice")?.checked) return;
   const line = String(text || "").trim();
   if (!line) return;
-  return speakNatural(line, { voice: FEMALE_VOICE, interrupt });
+  // Critical cues cancel any pending coalesced rep line so it can't cut them off later.
+  if (interrupt) {
+    clearTimeout(speakLatestTimer);
+    speakLatestTimer = null;
+    speakLatestLine = "";
+  }
+  return speakNatural(line, { voice: FEMALE_VOICE, interrupt, dropIfBusy });
 }
-function stopSpeak() { stopNatural(); }
+function stopSpeak() {
+  clearTimeout(speakLatestTimer);
+  speakLatestTimer = null;
+  speakLatestLine = "";
+  stopNatural();
+}
+
+/** Coalesce rapid rep cues: wait briefly, then speak only the latest (avoids cutting every line off). */
+function speakLatest(text, delayMs = 320) {
+  if (!$("#voice")?.checked) return;
+  const line = String(text || "").trim();
+  if (!line) return;
+  speakLatestLine = line;
+  clearTimeout(speakLatestTimer);
+  speakLatestTimer = setTimeout(() => {
+    speakLatestTimer = null;
+    const next = speakLatestLine;
+    speakLatestLine = "";
+    if (next) speakNatural(next, { voice: FEMALE_VOICE, interrupt: true });
+  }, delayMs);
+}
+
+function flushSpeakLatest() {
+  if (!speakLatestLine && !speakLatestTimer) return;
+  clearTimeout(speakLatestTimer);
+  speakLatestTimer = null;
+  const next = speakLatestLine;
+  speakLatestLine = "";
+  if (next) speakNatural(next, { voice: FEMALE_VOICE, interrupt: true });
+}
 
 const GOOD_EXTRAS = [
   "Keep it up!",
@@ -285,12 +323,15 @@ function showChip(text, kind, ms = 3000) {   // fades in, holds, fades out; no f
 
 let lastSetupSpoken = "", lastSetupAt = 0;
 function showSetup(g) {
-  // say setup instructions out loud too (only when they change, at most every 2.5 s)
-  // skip while the session-opening greeting is still playing
-  if (performance.now() >= welcomeQuietUntil
-      && g.title !== lastSetupSpoken && performance.now() - lastSetupAt > 2500) {
-    speak(g.title === "Hold still" ? "Hold still" : `${g.title}. ${g.sub}`);
-    lastSetupSpoken = g.title; lastSetupAt = performance.now();
+  // Speak actionable setup cues only (framing / paused). Never speak "Hold still"
+  // (UI still shows it). Don't stopSpeak on Hold still — gate flicker was cutting
+  // Go / framing lines off entirely. Skip during welcome.
+  if (performance.now() >= welcomeQuietUntil && g.title !== lastSetupSpoken) {
+    if (g.title !== "Hold still") {
+      speak(`${g.title}. ${g.sub}`, { interrupt: true });
+      lastSetupAt = performance.now();
+    }
+    lastSetupSpoken = g.title;
   }
   $("#setup").hidden = false;
   $("#setupTitle").textContent = g.title; $("#setupSub").textContent = g.sub;
@@ -319,7 +360,7 @@ function onPose(res, t) {
     $("#state").textContent = "setting up";
     if (g.ready) {
       phase = "active"; outFrames = 0; seg.reset(); hideSetup(); lastSetupSpoken = "";
-      showChip("Go!", "info", 1500); speak("Go");
+      showChip("Go!", "info", 1500); speak("Go", { interrupt: true });
       $("#state").textContent = "ready";
     }
     return;
@@ -353,7 +394,7 @@ function onMovement(frames) {
     logRow("skip", "–", "Not counted", v.short, "");
     sessionMemory.pushSkip({ reason: v.reason, short: v.short });
     recordRep("skip");
-    speak(`Not counted. ${v.reason}`);
+    speakLatest(`Not counted. ${v.reason}`);
     logAtpRep({
       repNumber: repCount + 1,
       counted: false,
@@ -433,16 +474,17 @@ function onMovement(frames) {
     exercise: model.exercise,
   });
 
-  // Spoken coaching: natural sentences (not raw chip text). Queued so it won't overlap.
-  // Session-complete summary is spoken separately after the last rep.
+  // Short spoken cues; coalesce so fast reps jump to the latest without chopping every line.
   const spoken = good
-    ? `${repCount}. Good form. ${nextGoodExtra()}`
-    : `${repCount}. ${coachSentence(out.label, fixCue)}`;
-  speak(spoken);
-
+    ? `${repCount}. Good.`
+    : `${repCount}. ${model.short[out.label] || fixCue || "Adjust form."}`;
   if (done) {
+    flushSpeakLatest();
+    speak(spoken, { interrupt: true });
     if (getRun()?.fromPlan) planSetDone();
     else showSetSummary();
+  } else {
+    speakLatest(spoken);
   }
 }
 
@@ -929,6 +971,12 @@ async function start({ quiet = false } = {}) {
     $("#start").disabled = true;
     paused = false;
     // Welcome plays only on the first Start of a session (click also unlocks audio in the browser).
+    // Prefetch common short cues in the background so later reps skip the TTS round-trip.
+    warmPhrases([
+      "Go",
+      "Paused. Step back into the frame.",
+      ...Array.from({ length: 20 }, (_, i) => `${i + 1}. Good.`),
+    ]);
     const welcome = sessionWelcomeLine();
     if (!quiet) {
       welcomeQuietUntil = performance.now() + 16000;
