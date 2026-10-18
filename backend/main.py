@@ -1,4 +1,4 @@
-"""Form Check coach API — bridges the browser to OCI Generative AI (with local fallbacks)."""
+"""Kinetix coach API — bridges the browser to OCI Generative AI (with local fallbacks)."""
 from __future__ import annotations
 
 import os
@@ -25,7 +25,7 @@ CORS_ORIGINS = [
 ]
 
 app = FastAPI(
-    title="Form Check Coach API",
+    title="Kinetix Coach API",
     description="Per-rep cues, mid-session Q&A, and end-of-set summaries via OCI GenAI.",
     version="1.0.0",
 )
@@ -75,7 +75,7 @@ class SessionPayload(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"service": "form-check-coach", "status": "ok"}
+    return {"service": "kinetix-coach", "status": "ok"}
 
 
 @app.post("/coach/cue")

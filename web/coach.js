@@ -1,4 +1,4 @@
-/** Client for Form Check coach API (OCI GenAI via FastAPI). */
+/** Client for the Kinetix coach API (OCI GenAI via FastAPI). */
 
 const API_BASE = (typeof window !== "undefined" && window.FORM_CHECK_API)
   || "http://127.0.0.1:8000";

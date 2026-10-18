@@ -1,8 +1,43 @@
-# Form Check (Kinetix exercise module)
+# Kinetix
 
-Live, on-device movement feedback for physical therapy exercises, styled as the Exercises screen of the Kinetix app. Point a webcam at yourself (or load a video),
-and Form Check counts your reps, spots common mistakes, and tells you how to fix them, on screen and out loud,
-after every rep. Everything runs in the browser tab: the video never leaves your computer.
+Patients practise their physical therapist's home exercises between visits with live, on-camera form feedback; their
+PT sees progress and approves AI-drafted plan changes. Point a webcam at yourself (or load a video), and Kinetix
+counts your reps, spots common mistakes, and tells you how to fix them, on screen and out loud, after every rep.
+Pose tracking runs in the browser tab: the video never leaves your computer.
+
+## The app
+
+| Screen | Route | Who |
+|---|---|---|
+| Landing page, sign-in pop-up | `#/`, `#/signin` | everyone |
+| Today (plan, PT feedback, your week) | `#/patient` | patient |
+| Warm-up → recording choice → live form check | `#/patient/warmup` → `#/patient/record` → `#/patient/session` | patient |
+| Session summary + check-in (pain, effort, note) | `#/patient/summary` | patient |
+| Settings (video & privacy, reminders, text size, spoken cues, care team + session sharing, account) | `#/patient/settings` | patient |
+| Exercise library (single exercise, no plan) | `#/library`, `#/library/<region>/<exercise>` | patient (read-only for PTs) |
+| Caseload: needs attention + all patients | `#/provider` | PT |
+| Patient progress (pain, form, deficits, adherence, sessions, errors) | `#/provider/patient/<id>` | PT |
+| AI plan review: accept / edit / dismiss, approve & send | `#/provider/plan/<draftId>` | PT |
+| Provider settings (AI assistant + pain limit, alerts, defaults) | `#/provider/settings` | PT |
+
+The loop: a patient practises → sessions log reps, form errors, pain and effort → the AI plan rules
+(`web/planRules.js`) draft changes → the PT reviews, edits and approves → the patient's Today plan updates with a
+note from the PT. Nothing reaches the patient without PT approval, and no progression is suggested while pain is
+above the PT's limit (Provider settings, default 4/10).
+
+### Demo mode
+
+Everything works with only `npm run serve`: no database, no OCI, no TTS server. Sign in from the pop-up with
+**Continue with demo patient account** (Sam Rivera, rotator cuff repair, week 3, pain rising) or **Continue with demo
+provider account** (Dr. Maya Lee, DPT, a caseload of 8). The seed (`web/demo/seed.js`) is fictional, uses only the 8
+exercises that have a model, and its dates are relative to today. Demo data lives in your browser's `localStorage`;
+**Reset demo data** is at the bottom of both settings screens. Live sessions in demo mode are saved to the same store,
+so the summary, caseload and patient progress screens show what you just did.
+
+With the ATP API running (see `api/README.md`) and a real account, sign-in uses it, and sessions and reps are logged
+there as before. The newer endpoints the screens read (plans, check-ins, caseload, drafts, settings) are not in
+`api/` yet; until they are, those reads fall back to the demo data. The AI plan rules try FastAPI
+`POST /coach/plan-suggestions` first and run the same rules in the browser when it isn't there.
 
 ## Features
 
@@ -43,8 +78,17 @@ after every rep. Everything runs in the browser tab: the video never leaves your
 npm run serve        # static server for web/ on port 8801
 ```
 
-Open <http://127.0.0.1:8801> in Chrome, Edge or Safari. After the warm-up (or **Skip warm-up**), choose a body area and an
-exercise, then press **Start session**.
+Open <http://127.0.0.1:8801> in Chrome, Edge or Safari, choose **I'm a patient** or **I'm a provider**, and continue
+with the demo account. As a patient, press **Start today's session**: warm-up, then the recording choice, then the
+camera. **Practise something else** opens the exercise library.
+
+Optional services (each one is used when it's running and skipped when it isn't):
+
+```bash
+npm run serve:api    # FastAPI coach on :8000 (OCI GenAI, local fallbacks)
+npm run serve:atp    # ATP accounts/sessions API on :3001 (needs an Oracle wallet, see api/README.md)
+```
+
 No build step or install is needed for the app. Camera access works on `localhost`. MediaPipe loads from the
 jsDelivr CDN, so the first load needs internet.
 
@@ -97,9 +141,17 @@ camera / video → MediaPipe Pose → setup gate → rep detection (shoulder ele
 
 ```
 web/                    the app (static files, served as-is)
-  index.html            layout and styles (Kinetix look: region → exercise → session)
+  index.html            app shell: routed views, warm-up, exercise library, live form check
+  kinetix.css           "Fresh Mint" design tokens + components (Plus Jakarta Sans)
+  router.js             hash router with patient / PT role guards
+  views/                one module per screen (landing + sign-in, patient home, summary, settings, caseload,
+                        patient progress, AI plan review, provider settings, recording choice)
+  data.js               data layer: demo store (localStorage) or the ATP API
+  demo/seed.js          fictional demo patients, PT, plans and sessions (dates relative to today)
+  planRules.js          AI plan rules + caseload flags (pain, missed days, slipping form)
+  planRun.js            the session in progress (plan exercises, sets, counted reps)
   catalog.js            exercise library: regions, exercises, what each targets, icons
-  app.js                camera loop, drawing, feedback, voice, rep log, full screen
+  app.js                camera loop, drawing, feedback, voice, rep log, full screen, plan sessions
   features.js           joint-angle features, rep detection, calibration, classifier (shared with the tests)
   rules.js              ROM angle checks: image-plane angles, rep values, clinical limits, verdict
   session.js            setup gate, rep validation rules, mobility setting
@@ -203,7 +255,9 @@ check (`training/rules_report.json`). Which mistake gets named can't be validate
 ## Privacy
 
 Pose detection, rep counting and classification all run locally in the browser. No video, images or landmarks are
-uploaded or stored.
+uploaded or stored, whichever recording choice the patient makes; only the choice itself is saved. Rep results,
+form scores and check-ins are shared with the patient's PT (auto-share can be turned off in Settings, per session too).
+Copy says health data is handled in accordance with HIPAA; this demo does not implement compliance controls.
 
 ## License
 

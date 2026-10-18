@@ -316,7 +316,7 @@ def generate_chat(
     hist = history or []
     hist_lines = "\n".join(f"{h.get('role', 'user')}: {h.get('content', '')}" for h in hist[-6:])
     system = (
-        "You are Form Check's PT coach. Answer ONLY using the session_context JSON. "
+        "You are Kinetix's PT coach. Answer ONLY using the session_context JSON. "
         "If the answer is not in the context, say you don't have that yet. "
         "Be brief (1-3 short sentences). Do not invent joint angles or diagnoses."
     )
@@ -333,7 +333,7 @@ def generate_summary(session_context: dict[str, Any] | None) -> tuple[dict[str, 
     ctx_json = json.dumps(session_context or {}, ensure_ascii=False)[:8000]
     system = (
         "You are an experienced physical therapist writing a post-session patient report "
-        "for home exercise (Form Check app). Use ONLY the session_context JSON — do not invent "
+        "for home exercise (Kinetix app). Use ONLY the session_context JSON — do not invent "
         "diagnoses, medications, or data that is not present. "
         "Return strict JSON only (no markdown) with these keys:\n"
         "- summary: string, 4-7 sentences for the patient to read. Cover: what exercise, "

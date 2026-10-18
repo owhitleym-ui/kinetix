@@ -11,6 +11,15 @@ import { speakNatural, stopNatural, ttsHealth, FEMALE_VOICE } from "./naturalSpe
 import { startAtpSession, logAtpRep, endAtpSession } from "./atpClient.js";
 import { judgeRules, ruleValues } from "./rules.js";
 import { ARROW, REGIONS, findExercise, regionArt } from "./catalog.js";
+import { currentUser, homeFor } from "./account.js";
+import { getSettings, ptFor, saveSession, saveSettings } from "./data.js";
+import { PLAIN, plainCue, plainLine } from "./exerciseText.js";
+import { beginLibraryRun, clearRun, getRun, saveRun } from "./planRun.js";
+import { go, onLeave, replace, route, showScreen, startRouter } from "./router.js";
+import { esc as escHtml, logo, toast } from "./ui.js";
+import { headerHTML, bindHeader } from "./views/chrome.js";
+import { openRecordChoice } from "./views/recordChoice.js";
+import { applyUserPrefs } from "./views/index.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "models/pose_landmarker_full.task";
@@ -87,8 +96,8 @@ const params = new URLSearchParams(location.search);
 const TEST = params.has("test") || params.has("expected");   // testing aids + model details only in test mode
 const video = $("#video"), canvas = $("#canvas"), ctx = canvas.getContext("2d");
 const pageParams = new URLSearchParams(location.search);
-// Coach greets this name at session start (?name=… overrides).
-const COACH_NAME = (pageParams.get("name") || "Vaaisha").trim() || "Vaaisha";
+// Coach greets this name at session start (?name=… overrides; otherwise the signed-in patient's first name).
+const coachName = () => (pageParams.get("name") || currentUser()?.first || "Vaaisha").trim() || "Vaaisha";
 let welcomeQuietUntil = 0;   // don't let setup prompts talk over the opening greeting
 // Clear, professional names for what the model detects
 const LABELS = {
@@ -225,6 +234,47 @@ function showCount(sub = "") {
   $("#countNum").textContent = repCount;
   $("#countOf").textContent = `/${setSize()}`;
   $("#countSub").textContent = sub;
+  updateRepPanel();
+}
+
+// ---------- P4 rep panel: big ring, this set's dots, plain tally, "Focus on" ----------
+let setDots = [];   // "g" good / "f" to fix, for the current set
+const RING_LEN = 2 * Math.PI * 52;
+function updateRepPanel() {
+  const n = setSize(), c = Math.min(repCount, n);
+  $("#ringFill").setAttribute("stroke-dasharray", `${(RING_LEN * c / n).toFixed(1)} ${RING_LEN.toFixed(1)}`);
+  $("#ringFill").style.opacity = c ? 1 : 0;   // a round cap would show a dot at zero
+  $("#ringNum").textContent = repCount; $("#ringOf").textContent = `of ${n} reps`;
+  const g = setDots.filter((d) => d === "g").length, f = setDots.length - g;
+  $("#bigRing").setAttribute("aria-label", `${repCount} of ${n} reps: ${g} good, ${f} to fix`);
+  $("#repDots").innerHTML = Array.from({ length: Math.max(n, setDots.length) }, (_, i) => `<span class="${setDots[i] || ""}"></span>`).join("");
+  $("#repTally").innerHTML = setDots.length ? `${g} good · <span class="fix">${f} to fix</span>` : "Let’s get started";
+  const run = getRun(), it = run?.items[run.i];
+  const name = it?.name || EX_TITLES[currentEx] || "";
+  $("#setTitle").textContent = run?.fromPlan && it ? `${name} · Set ${run.set} of ${it.sets}` : name;
+}
+function setFocus(label) {
+  const known = PLAIN[label];
+  $("#focusCue").textContent = known ? plainCue(label) : (model?.short?.[label] || plainCue(label));
+  $("#focusLine").textContent = plainLine(label);
+}
+function setFocusDefault(item) {
+  $("#focusCue").textContent = item?.cue || (item?.tempo === "slow" ? "Go slow" : "Move slowly and with control");
+  $("#focusLine").textContent = item?.tempo === "slow" ? "About 3 seconds on the way down." : "Smooth reps, all the way through.";
+}
+/** Count a rep (or a not-counted movement) toward the session in progress. */
+function recordRep(kind, label, title) {
+  const run = getRun(); if (!run) return;
+  const r = run.results[run.i]; if (!r) return;
+  if (kind === "skip") r.skip++;
+  else {
+    r.done++; r[kind === "good" ? "good" : "bad"]++;
+    if (kind === "bad") {
+      const m = r.mistakes.find((x) => x.code === label);
+      if (m) m.n++; else r.mistakes.push({ code: label, title, n: 1 });
+    }
+  }
+  saveRun(run);
 }
 
 function showChip(text, kind, ms = 3000) {   // fades in, holds, fades out; no flashing
@@ -248,7 +298,7 @@ function showSetup(g) {
 }
 
 function sessionWelcomeLine() {
-  return `${COACH_NAME}, how are you? Make sure you fit yourself in the screen so we can calibrate your movements. I'll start counting your reps whenever you're ready.`;
+  return `${coachName()}, how are you? Make sure you fit yourself in the screen so we can calibrate your movements. I'll start counting your reps whenever you're ready.`;
 }
 const hideSetup = () => { $("#setup").hidden = true; };
 
@@ -302,6 +352,7 @@ function onMovement(frames) {
     showChip(`Not counted · ${v.short}`, "muted", 3500);
     logRow("skip", "–", "Not counted", v.short, "");
     sessionMemory.pushSkip({ reason: v.reason, short: v.short });
+    recordRep("skip");
     speak(`Not counted. ${v.reason}`);
     logAtpRep({
       repNumber: repCount + 1,
@@ -330,6 +381,9 @@ function onMovement(frames) {
     learn(x, v.amp);
   }
   const good = out.label === "CORRECT", done = repCount === setSize();
+  setDots.push(good ? "g" : "f");
+  recordRep(good ? "good" : "bad", out.label, nice(out.label));
+  if (!good) setFocus(out.label);
   showCount(done ? "set complete ✓" : "");
   showChip(good ? `✓ Good form${done ? " · set complete" : ""}` : `${model.short[out.label]}${done ? " · set complete" : ""}`, good ? "good" : "bad");
   if (good) clearHighlight(); else setHighlight(out.label);
@@ -386,7 +440,93 @@ function onMovement(frames) {
     : `${repCount}. ${coachSentence(out.label, fixCue)}`;
   speak(spoken);
 
-  if (done) showSetSummary();
+  if (done) {
+    if (getRun()?.fromPlan) planSetDone();
+    else showSetSummary();
+  }
+}
+
+// ---------- plan mode: sets, then the next exercise, then the summary ----------
+function planSetDone() {
+  const run = getRun(), it = run.items[run.i];
+  if (run.set < it.sets) {
+    run.set++; saveRun(run);
+    setTimeout(() => { if (running) nextSet(); }, 2500);
+  } else if (run.i < run.items.length - 1) {
+    run.i++; run.set = 1; saveRun(run);
+    speak(`Nice work. Next up: ${run.items[run.i].name}.`);
+    setTimeout(() => { if (running) advanceExercise(); }, 3500);
+  } else {
+    speak("That’s your whole plan for today. Great work!");
+    setTimeout(() => endSession(), 3000);
+  }
+}
+function nextSet() {
+  const run = getRun(), it = run.items[run.i];
+  repCount = 0; setDots = []; phase = "setup"; outFrames = 0; seg.reset(); gate.reset(); lastSetupSpoken = "";
+  showCount("get into position"); renderPlanSteps();
+  showChip(`Set ${run.set} of ${it.sets}`, "info", 2500);
+  speak(`Set ${run.set} of ${it.sets}. Get back into position.`);
+}
+async function advanceExercise() {
+  const run = getRun(), it = run.items[run.i];
+  stop();
+  await loadModel(it.ex);
+  usePlanItem(it);
+  renderPlanSteps();
+  await start({ quiet: true });
+}
+function usePlanItem(it) {
+  setSizeVal = it.reps;
+  pressed($("#setSizeSeg"), $(`#setSizeSeg [data-n="${it.reps}"]`));
+  repCount = 0; setDots = [];
+  setFocusDefault(it);
+  showCount("");
+}
+function renderPlanSteps() {
+  const ol = $("#planSteps"), run = getRun(); if (!ol || !run) return;
+  ol.innerHTML = run.items.map((it, i) => {
+    const cls = i < run.i ? "done" : i === run.i ? "current" : "";
+    const label = i < run.i ? `✓ ${escHtml(it.name)}` : `${i + 1} · ${escHtml(it.name)}`;
+    return `${i ? '<li class="sep" aria-hidden="true">›</li>' : ""}<li class="step ${cls}"${i === run.i ? ' aria-current="step"' : ""}>${label}</li>`;
+  }).join("");
+}
+
+/** End the session: save what was counted (never video) and open the summary. */
+async function endSession({ hurt = false } = {}) {
+  const run = getRun();
+  if (running || paused) stop();
+  const user = currentUser();
+  if (!run || user?.role !== "patient") {   // not signed in (tests, direct links): just stop
+    $("#status").textContent = "Stopped.";
+    return;
+  }
+  const total = run.results.reduce((t, r) => t + r.done, 0);
+  if (!total && !hurt) { clearRun(); toast("No reps were counted, so nothing was saved."); go(run.fromPlan ? "#/patient" : "#/library"); return; }
+  const startedAt = new Date(run.startedAt || Date.now());
+  const s = saveSession({
+    patientId: run.patientId, startedAt: startedAt.toISOString(), endedAt: new Date().toISOString(),
+    durationMin: Math.max(1, Math.round((Date.now() - startedAt) / 60000)), fromPlan: run.fromPlan,
+    exercises: run.fromPlan ? run.results : run.results.filter((r) => r.done), videoChoice: run.videoChoice || "local",
+    atpSessionIds: run.atpIds || [], checkin: null,
+  });
+  clearRun();
+  go(`#/patient/summary?id=${encodeURIComponent(s.id)}${hurt ? "&hurt=1" : ""}`);
+}
+
+// Pause keeps the camera on but stops judging; resuming re-checks the start position.
+let paused = false;
+function togglePause() {
+  if (!paused && !running) return;
+  if (!paused) {
+    paused = true; running = false; video.pause();
+    $("#pauseBtn").textContent = "Resume";
+    showChip("Paused", "muted", 600000); $("#state").textContent = "paused";
+  } else {
+    paused = false; seg.reset(); gate.reset(); phase = "setup"; outFrames = 0; lastTime = -1;
+    $("#pauseBtn").textContent = "Pause"; $("#chip").classList.remove("show");
+    video.play().then(() => { running = true; loop(); });
+  }
 }
 
 // Rep log: one concise row per movement (newest first) + a running summary.
@@ -784,21 +924,31 @@ function fitStage() {
 }
 window.addEventListener("resize", () => { if (video.videoWidth) fitStage(); });
 
-async function start() {
+async function start({ quiet = false } = {}) {
   try {
     $("#start").disabled = true;
-    // Welcome plays only on Start session (click also unlocks audio in the browser).
+    paused = false;
+    // Welcome plays only on the first Start of a session (click also unlocks audio in the browser).
     const welcome = sessionWelcomeLine();
-    welcomeQuietUntil = performance.now() + 16000;
-    speak(welcome, { interrupt: true });
+    if (!quiet) {
+      welcomeQuietUntil = performance.now() + 16000;
+      speak(welcome, { interrupt: true });
+    } else {
+      const it = getRun()?.items[getRun().i];
+      if (it) speak(`${it.name}. ${it.sets} set${it.sets === 1 ? "" : "s"} of ${it.reps}. Get into position.`, { interrupt: true });
+    }
     await loadLandmarker();
     seg.reset(); gate.reset(); cal = new Calibrator(model.calibration ?? { reps: 3, window: 20 }); calAmps = [];
     phase = "setup"; outFrames = 0; repCount = 0; lastTime = -1; facingHist = []; smoothImg = null; shownAngle = {}; smoothAngle = {};
+    setDots = [];
     clearHighlight();
     $("#latest").innerHTML = `<div class="muted">${note()}</div>`;
     showCount("get into position"); resetLog(); resetCoachUi();
     sessionMemory.start({ exercise: model.exercise, title: EX_TITLES[currentEx], target: setSize() });
-    await startAtpSession(model.exercise);
+    const run = getRun();
+    if (run && !run.startedAt) { run.startedAt = Date.now(); saveRun(run); }
+    const atpId = await startAtpSession(model.exercise);
+    if (run && atpId) { const r = getRun(); r.atpIds = [...(r.atpIds || []), atpId]; saveRun(r); }
     lastSetupSpoken = ""; lastSetupAt = 0;
     $("#idle").hidden = true; $("#counter").hidden = false; $("#stage").classList.add("live");
     if (source === "webcam") {
@@ -814,17 +964,22 @@ async function start() {
     showSetup({ title: "Show your whole body", sub: "Step back until you're fully in the frame, head to feet.", progress: 0 });
     appendCoachMsg("system", welcome);
     running = true; $("#stop").disabled = false; $("#status").textContent = "";
+    $("#start").hidden = true; $("#pauseBtn").hidden = false; $("#pauseBtn").textContent = "Pause";
     loop();
   } catch (e) {
-    $("#status").textContent = "Error: " + e.message; $("#start").disabled = false;
+    const blocked = e?.name === "NotAllowedError" || e?.name === "SecurityError";
+    $("#status").textContent = blocked ? "Camera access is blocked. Allow the camera for this site, then press Start." : "Error: " + e.message;
+    $("#start").disabled = false;
+    if (!running) { $("#idle").hidden = false; $("#counter").hidden = true; $("#stage").classList.remove("live"); }
   }
 }
 
 function stop() {
-  running = false;
+  running = false; paused = false;
   stream?.getTracks().forEach((t) => t.stop()); stream = null;
   video.pause();
   $("#start").disabled = false; $("#stop").disabled = true;
+  $("#start").hidden = false; $("#pauseBtn").hidden = true;
   endAtpSession();
 }
 
@@ -935,17 +1090,15 @@ function jumpToWarmup(index) {
   warmupElapsed = WARMUP.slice(0, index).reduce((sum, [seconds]) => sum + seconds, 0);
   renderWarmup();
 }
-function leaveWarmup() {
+// Done / Skip: started from Today's plan -> recording choice -> the plan. Reached any other way -> the library.
+function exitWarmup() {
   warmupRunning = false; clearInterval(warmupClock);
-  $("#warmupScreen").hidden = true;
-  $("#coachApp").hidden = false;
-  window.scrollTo(0, 0);
-  ($("#viewSession").hidden ? $("#regions .region") : $("#start"))?.focus({ preventScroll: true });
+  go(getRun()?.fromPlan && currentUser()?.role === "patient" ? "#/patient/record" : "#/library");
 }
 $("#warmupStart").onclick = toggleWarmup;
 $("#warmupNext").onclick = advanceWarmup;
-$("#warmupSkip").onclick = leaveWarmup;
-$("#warmupContinue").onclick = leaveWarmup;
+$("#warmupSkip").onclick = exitWarmup;
+$("#warmupContinue").onclick = exitWarmup;
 $("#warmupRestart").onclick = () => { $("#warmupScreen").classList.remove("is-complete"); jumpToWarmup(0); };
 document.querySelectorAll(".warmup-step").forEach((step) => step.addEventListener("click", () => jumpToWarmup(Number(step.dataset.warmupStep))));
 document.addEventListener("keydown", (e) => {
@@ -968,6 +1121,7 @@ function renderRegions() {
   }).join("");
 }
 function renderExercises(r) {
+  $("#coachApp").classList.toggle("read-only", currentUser()?.role === "pt");
   $("#regionBadge").innerHTML = regionArt(r.id);
   $("#regionTitle").textContent = r.name; $("#regionLede").textContent = r.lede;
   $("#exList").innerHTML = r.exercises.map((e) => `<button class="ex-card${e.soon ? " soon" : ""}" data-ex="${e.ex}"${e.soon ? ' aria-disabled="true" tabindex="-1"' : ""}>
@@ -978,32 +1132,132 @@ function renderExercises(r) {
 }
 const VIEWS = ["viewRegions", "viewExercises", "viewSession"];
 const showView = (id) => VIEWS.forEach((v) => { $("#" + v).hidden = v !== id; });
-async function route() {
-  const [regionId, ex] = location.hash.replace(/^#\/?/, "").split("/");
-  const region = REGIONS.find((r) => r.id === regionId), found = ex ? findExercise(ex) : null;
-  if (found && !found.item.soon) {
+
+// Header of the camera/library screen: the app header in the library; logo + plan steps + End session in a session.
+function renderCoachHeader(kind) {
+  const h = $("#coachHeader"), user = currentUser(), run = getRun();
+  if (kind === "session") {
+    h.innerHTML = `<header class="k-header"><div class="k-header-in"><a class="brand" href="${user ? homeFor(user) : "#/"}">${logo(36)}Kinetix</a>
+      ${run?.fromPlan ? '<ol class="plan-steps" id="planSteps" aria-label="Today’s exercises"></ol>' : `<a href="#/library/${findExercise(currentEx)?.region.id || ""}" style="font-weight:700">Exercise library</a>`}
+      <button type="button" class="link-btn" id="endSessionBtn" style="font-size:.9375rem;font-weight:800">End session</button></div></header>`;
+    renderPlanSteps();
+    $("#endSessionBtn").onclick = () => endSession();
+  } else if (user) {
+    h.innerHTML = headerHTML({ user, active: "" }); bindHeader(h);
+  } else {
+    h.innerHTML = `<header class="k-header"><div class="k-header-in"><a class="brand" href="#/">${logo(36)}Kinetix</a><a class="btn btn-secondary" href="#/signin">Sign in</a></div></header>`;
+  }
+}
+function applySessionPrefs() {
+  const user = currentUser();
+  if (user?.role !== "patient") return;
+  $("#voice").checked = getSettings(user.dataId).spokenCues !== false;
+}
+function showRecBadge(run) {
+  const share = run?.videoChoice === "share";
+  $("#recBadge").hidden = !share;
+  if (share) $("#recText").textContent = `Recording · shared with ${ptFor(run.patientId)?.short || "your PT"}`;
+}
+
+// Exercise library: #/library -> #/library/<region> -> #/library/<region>/<exercise> (a single exercise, no plan)
+async function libraryRoute({ params, user }) {
+  showScreen("coach"); applyUserPrefs(user);
+  $("#viewSession").classList.remove("plan-mode");
+  const region = REGIONS.find((r) => r.id === params.region), found = params.ex ? findExercise(params.ex) : null;
+  if (found && !found.item.soon && user?.role !== "pt") {
     if (found.item.ex !== currentEx || !model) { stop(); hideSetup(); await loadModel(found.item.ex); }
+    if (!running) { beginLibraryRun(user?.dataId, found.item.ex, found.item.name, setSize()); setDots = []; repCount = 0; }
+    renderCoachHeader("session"); applySessionPrefs(); showRecBadge(null); setFocusDefault(null); showCount("");
     showView("viewSession");
+    document.title = `${found.item.name} · Kinetix`;
   } else {
     if (running) { stop(); $("#status").textContent = ""; }
-    if (region) { renderExercises(region); showView("viewExercises"); } else showView("viewRegions");
+    renderCoachHeader("library");
+    if (region) { renderExercises(region); showView("viewExercises"); } else { $("#coachApp").classList.toggle("read-only", user?.role === "pt"); showView("viewRegions"); }
+    document.title = "Exercise library · Kinetix";
   }
   window.scrollTo(0, 0);
 }
-$("#regions").addEventListener("click", (e) => { const b = e.target.closest(".region"); if (b) location.hash = `#/${b.dataset.region}`; });
+const libraryOpts = { role: ["patient", "pt"], allowAnon: () => TEST || params.has("ex") || params.has("autostart") };
+route("/library", libraryRoute, libraryOpts);
+route("/library/:region", libraryRoute, libraryOpts);
+route("/library/:region/:ex", libraryRoute, libraryOpts);
+
+// P2 · warm-up (unchanged screen)
+route("/patient/warmup", ({ user }) => {
+  if (running) stop();
+  showScreen("warmup"); applyUserPrefs(user);
+  $("#warmupScreen").classList.remove("is-complete");
+  if (!warmupRunning) jumpToWarmup(0);
+  document.title = "Warm-up · Kinetix";
+  window.scrollTo(0, 0);
+  $("#warmupStart").focus({ preventScroll: true });
+  onLeave(() => { if (warmupRunning) toggleWarmup(); });
+}, { role: "patient" });
+
+// P4 in plan mode: the plan's current exercise, ready to start.
+async function prepPlanSession(run) {
+  showScreen("coach"); applyUserPrefs(currentUser());
+  const it = run.items[run.i];
+  $("#viewSession").classList.add("plan-mode");
+  if (it.ex !== currentEx || !model) { stop(); hideSetup(); await loadModel(it.ex); }
+  if (!running) usePlanItem(it);
+  renderCoachHeader("session"); applySessionPrefs(); showRecBadge(run);
+  showView("viewSession");
+  document.title = "Today’s session · Kinetix";
+  window.scrollTo(0, 0);
+}
+
+// P3 · recording choice over the blurred session, then the camera starts.
+route("/patient/record", async ({ user }) => {
+  const run = getRun();
+  if (!run?.fromPlan) { go("#/patient"); return; }
+  await prepPlanSession(run);
+  onLeave(() => { closeModal?.(); if (running || paused) stop(); });
+  const pid = user.dataId, st = getSettings(pid);
+  const proceed = (choice, remember) => {
+    const r = getRun(); r.videoChoice = choice; saveRun(r);
+    saveSettings(pid, remember ? { videoChoice: choice, askEachSession: false, rememberChoice: true } : { videoChoice: choice });
+    replace("#/patient/session");
+    showRecBadge(r);
+    start();
+  };
+  let closeModal = null;
+  if (st.askEachSession === false) { proceed(st.videoChoice, false); return; }
+  closeModal = openRecordChoice({ ptName: ptFor(pid)?.short || "your PT", choice: st.videoChoice,
+    onCamera: (c, rem) => { closeModal = null; proceed(c, rem); },
+    onNotNow: () => { closeModal = null; clearRun(); go("#/patient"); } });
+}, { role: "patient" });
+
+route("/patient/session", async () => {
+  const run = getRun();
+  if (!run?.fromPlan) { go("#/patient"); return; }
+  await prepPlanSession(run);
+  onLeave(() => { if (running || paused) stop(); });
+}, { role: "patient" });
+
+$("#regions").addEventListener("click", (e) => { const b = e.target.closest(".region"); if (b) location.hash = `#/library/${b.dataset.region}`; });
 $("#exList").addEventListener("click", (e) => {
   const b = e.target.closest(".ex-card"); if (!b || b.classList.contains("soon")) return;
-  location.hash = `#/${findExercise(b.dataset.ex).region.id}/${b.dataset.ex}`;
+  if (currentUser()?.role === "pt") { toast("The library is read-only for providers."); return; }
+  location.hash = `#/library/${findExercise(b.dataset.ex).region.id}/${b.dataset.ex}`;
 });
-$("#backToRegions").onclick = () => { location.hash = "#/"; };
-$("#backToExercises").onclick = () => { location.hash = `#/${findExercise(currentEx).region.id}`; };
-window.addEventListener("hashchange", route);
+$("#backToRegions").onclick = () => { location.hash = "#/library"; };
+$("#backToExercises").onclick = () => { location.hash = `#/library/${findExercise(currentEx).region.id}`; };
+$("#pauseBtn").onclick = togglePause;
+$("#hurtBtn").onclick = () => endSession({ hurt: true });
+$("#voice").addEventListener("change", () => {
+  const user = currentUser();
+  if (user?.role === "patient") saveSettings(user.dataId, { spokenCues: $("#voice").checked });
+});
 
 // ---------- controls ----------
 const pressed = (group, btn) => group.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
 $("#setSizeSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   setSizeVal = Number(b.dataset.n); pressed($("#setSizeSeg"), b); showCount($("#countSub").textContent);
+  const run = getRun();
+  if (run) { run.items[run.i].reps = setSizeVal; run.results[run.i].reps = setSizeVal; run.results[run.i].target = run.items[run.i].sets * setSizeVal; saveRun(run); updateRepPanel(); }
 });
 function setSource(src) {
   source = src;
@@ -1033,7 +1287,8 @@ $("#fsBtn").onclick = toggleFullscreen;
 document.addEventListener("fullscreenchange", onFullscreenChange);
 document.addEventListener("webkitfullscreenchange", onFullscreenChange);
 document.addEventListener("keydown", (e) => {
-  if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.target.closest("input, select, textarea")) toggleFullscreen();
+  if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.target.closest("input, select, textarea")
+      && !$("#coachApp").hidden && !$("#viewSession").hidden && !document.querySelector(".modal-backdrop")) toggleFullscreen();
 });
 
 function setMobility(m) {
@@ -1051,17 +1306,20 @@ $("#start").onclick = start;
 $("#stop").onclick = () => { stop(); $("#status").textContent = "Stopped."; };
 $("#resetTally").onclick = () => { tally = { n: 0, exact: 0, binary: 0 }; $("#tally").textContent = ""; };
 
-// ?ex=<exercise> opens that exercise's session directly (used by the tests)
+// ?ex=<exercise> opens that exercise's session directly (used by the tests); ?autostart / ?test / ?expected skip the
+// landing and warm-up and go straight to the library.
 const exParam = params.get("ex") && findExercise(params.get("ex"));
-if (exParam && !exParam.item.soon) history.replaceState(null, "", `${location.pathname}${location.search}#/${exParam.region.id}/${exParam.item.ex}`);
+if (exParam && !exParam.item.soon) replace(`#/library/${exParam.region.id}/${exParam.item.ex}`);
+else if ((params.get("autostart") || TEST) && !location.hash.startsWith("#/library")) replace("#/library");
 renderRegions();
-await route();
+setFocusDefault(null);
+if (TEST || params.get("autostart")) $("#coachDrawer").open = true;   // test aids + rep log visible
+await startRouter();
 setMobility(params.get("mobility") || mobility);
 showCount("");
 if (params.get("video")) { setSource("file"); $("#fileName").textContent = params.get("video").split("/").pop(); }
 // The model detects the mistake type by itself. The "I'm doing…" selector is only a testing aid (?test=1).
 $("#testWrap").hidden = !TEST; $("#resetTally").hidden = !TEST;
 if (params.get("expected")) $("#expected").value = params.get("expected");
-if (params.get("autostart") || params.has("test") || params.has("expected")) leaveWarmup();
 if (params.get("autostart")) start();
 

@@ -2,7 +2,7 @@
   "name": "form-check",
   "version": "1.0.0",
   "private": true,
-  "description": "Live, on-device movement feedback for physical therapy exercises (MediaPipe Pose + per-exercise mistake classifiers).",
+  "description": "Kinetix: practise your physical therapist's plan at home with live, on-device form feedback (MediaPipe Pose + per-exercise mistake classifiers), and let your PT approve AI-drafted plan changes.",
   "type": "module",
   "scripts": {
     "serve": "node scripts/serve-web.mjs",

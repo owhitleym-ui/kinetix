@@ -1,0 +1,34 @@
+// Registers every routed (non-camera) view. The warm-up, recording choice, live session and library routes are
+// registered by app.js, which owns the camera engine.
+import { route, showScreen } from "../router.js";
+import { getSettings } from "../data.js";
+import { landingRoute, signinRoute } from "./landing.js";
+import { patientHomeRoute } from "./patientHome.js";
+import { summaryRoute } from "./summary.js";
+import { applyTextSize, patientSettingsRoute } from "./patientSettings.js";
+import { caseloadRoute, draftsRoute } from "./caseload.js";
+import { patientDetailRoute } from "./patientDetail.js";
+import { aiPlanRoute } from "./aiPlan.js";
+import { providerSettingsRoute } from "./providerSettings.js";
+import { stubPage } from "./chrome.js";
+
+/** Patients get their own text size everywhere; everyone else sees the default. */
+export function applyUserPrefs(user) {
+  applyTextSize(user?.role === "patient" ? getSettings(user.dataId).textSize : 0);
+}
+const page = (fn) => (ctx) => { showScreen("app"); applyUserPrefs(ctx.user); return fn(ctx); };
+const stub = (what, active) => page(({ user }) => stubPage(what, { active, user }));
+
+route("/", page(landingRoute));
+route("/signin", page(signinRoute));
+route("/patient", page(patientHomeRoute), { role: "patient" });
+route("/patient/progress", stub("My progress", "progress"), { role: "patient" });
+route("/patient/messages", stub("Messages", "messages"), { role: "patient" });
+route("/patient/summary", page(summaryRoute), { role: "patient" });
+route("/patient/settings", page(patientSettingsRoute), { role: "patient" });
+route("/provider", page(caseloadRoute), { role: "pt" });
+route("/provider/drafts", page(draftsRoute), { role: "pt" });
+route("/provider/messages", stub("Messages", "messages"), { role: "pt" });
+route("/provider/patient/:id", page(patientDetailRoute), { role: "pt" });
+route("/provider/plan/:draftId", page(aiPlanRoute), { role: "pt" });
+route("/provider/settings", page(providerSettingsRoute), { role: "pt" });

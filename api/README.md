@@ -1,4 +1,4 @@
-# Form Check ATP API
+# Kinetix ATP API
 
 Logs sessions/reps to Oracle Autonomous DB and (optionally) uploads feature JSON to Object Storage.
 
@@ -43,3 +43,20 @@ Until OCI API keys are set, DB logging still works; uploads are skipped.
 | POST | `/api/sessions/:id/share` | Grant session to a PT |
 | DELETE | `/api/sessions/:id/share/:ptUserId` | Revoke share |
 | POST | `/api/reps` | Log rep (+ upload JSON if OCI configured) |
+
+## Planned for the Kinetix screens (not built yet)
+
+The new web screens read through `web/data.js`, which calls these endpoints when a JWT exists and `/health` answers,
+and falls back to the browser demo store when an endpoint is missing (so they are safe to add one at a time):
+
+| Endpoint | Used by |
+|---|---|
+| `GET /api/me/plan` | Patient Today (active plan + PT message) |
+| `POST /api/checkins` `{ sessionId, pain, effort, note }` | Session summary |
+| `GET /api/caseload` (pt) | Provider caseload |
+| `GET/PUT /api/settings` | Patient and provider settings |
+| `POST /api/drafts/:id/approve` | AI plan review |
+
+A migration `schema/002_kinetix.sql` would add `care_team`, `plans` / `plan_items`, `pt_messages`, `checkins`,
+`clinical_profile`, `ai_drafts` / `ai_suggestions` and `settings`, with care-team auto-sharing of new sessions
+(keeping `session_shares` and per-session revoke).

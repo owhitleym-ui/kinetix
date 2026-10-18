@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Create account · Form Check</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%224%22 fill=%22%232563eb%22/%3E%3Ccircle cx=%228%22 cy=%228%22 r=%223.5%22 fill=%22white%22/%3E%3C/svg%3E">
+<title>Create account · Kinetix</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="auth.css">
 </head>
 <body>
   <main class="auth-page">
     <a class="auth-brand" href="index.html">
-      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.5"/></svg></span>
-      Form Check
+      <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.65 9.9L14.35 9.9L21.03 10.06L15.8 14.24L17.58 20.69L12 17L6.42 20.69L8.2 14.24L2.97 10.06Z" fill="#4ca154" stroke="#4ca154" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="5.4" r="2.8" fill="#306339"/></svg>
+      Kinetix
     </a>
     <form class="auth-card" id="registerForm">
       <h1>Create account</h1>
@@ -45,8 +45,9 @@
   </main>
 <script src="config.js"></script>
 <script type="module">
-  import { register, isLoggedIn } from "./auth.js";
-  if (isLoggedIn()) location.replace("index.html");
+  import { register, isLoggedIn, getUser } from "./auth.js";
+  const home = () => (getUser()?.role === "pt" ? "index.html#/provider" : "index.html#/patient");
+  if (isLoggedIn()) location.replace(home());
 
   const form = document.getElementById("registerForm");
   const roleInput = document.getElementById("role");
@@ -73,7 +74,7 @@
         displayName: String(fd.get("displayName")),
         role: String(fd.get("role")),
       });
-      location.href = "index.html";
+      location.href = home();
     } catch (err) {
       error.textContent = err.message || "Registration failed";
       error.hidden = false;

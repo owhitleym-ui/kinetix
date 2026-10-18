@@ -317,7 +317,7 @@ async function main() {
   await initDb();
   initStorage();
   app.listen(PORT, "127.0.0.1", () => {
-    console.log(`Form Check API http://127.0.0.1:${PORT}`);
+    console.log(`Kinetix API http://127.0.0.1:${PORT}`);
   });
 }
 

@@ -1,4 +1,4 @@
-/** Client auth helpers for Form Check ATP API (localStorage JWT). */
+/** Client auth helpers for the Kinetix ATP API (localStorage JWT). */
 
 const TOKEN_KEY = "formcheck.token";
 const USER_KEY = "formcheck.user";
@@ -28,6 +28,7 @@ export function getUser() {
 }
 
 export function setSession(token, user) {
+  localStorage.removeItem("kinetix.demoUser");   // a real account replaces any demo sign-in
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
