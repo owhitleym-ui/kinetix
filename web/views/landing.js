@@ -5,7 +5,7 @@ import { resetMode, users } from "../data.js";
 import { go, onLeave, showScreen } from "../router.js";
 
 const check = `<span class="ck">${ICON.check}</span>`;
-const skeleton = `<svg viewBox="0 0 200 300" aria-hidden="true"><g stroke="#dfe7e2" stroke-width="3" stroke-linecap="round" fill="none"><circle cx="100" cy="40" r="18"/><path d="M100 58V160M70 80H130M100 160L80 240M100 160L120 240M70 80L50 140"/></g><path d="M130 80L188 66" stroke="#4ade80" stroke-width="5" stroke-linecap="round"/><g fill="#4ade80"><circle cx="130" cy="80" r="5"/><circle cx="188" cy="66" r="5"/></g></svg>`;
+const skeleton = `<svg viewBox="0 0 200 300" aria-hidden="true"><g stroke="#dfe7e2" stroke-width="3" stroke-linecap="round" fill="none"><circle cx="100" cy="40" r="18"/><path d="M100 58V160M70 80H130M100 160L80 240M100 160L120 240M70 80L50 140"/></g><g class="l-arm"><path d="M130 80L188 66" stroke="#4ade80" stroke-width="5" stroke-linecap="round"/><g fill="#4ade80"><circle cx="130" cy="80" r="5"/><circle cx="188" cy="66" r="5"/></g></g></svg>`;
 
 const STEPS = [
   ["Your PT sets the plan", "Exercises, reps and form cues come from your physical therapist, not a generic app.", "var(--primary-soft)", "var(--primary-ink)"],
@@ -45,26 +45,26 @@ function landingHTML() {
   </header>
   <main>
   <section class="l-section l-hero">
-    <div class="l-hero-copy">
+    <div class="l-hero-copy" data-reveal="left">
       <span class="l-pill">Physical therapy, between visits</span>
       <h1>Your PT’s plan, coached at home.</h1>
       <p class="l-lede">Kinetix watches your form through your camera, gives you live cues on every rep, and shares your progress with your physical therapist, so your plan keeps up with you.</p>
       <div class="l-cta"><a class="btn btn-primary lg" href="#/signin?role=patient">I’m a patient${ICON.arrow}</a><a class="btn btn-secondary lg" href="#/signin?role=provider">I’m a provider</a></div>
       <p class="muted" style="margin:0;font-size:.875rem">Patients join with the invite code from their physical therapist.</p>
     </div>
-    <div class="l-mock" aria-hidden="true">
+    <div class="l-mock" aria-hidden="true" data-reveal="right" style="--d:.15s">
       <div class="l-cam">${skeleton}<div class="l-cue"><span class="dot" style="width:12px;height:12px;background:var(--primary)"></span>Good height — lower slowly</div></div>
       <div class="l-rep">${ring({ size: 110, value: 0.6, stroke: 12, label: '<span style="font-size:2.25rem">6</span>', sub: "of 10" })}<span>Reps this set</span></div>
       <div class="l-note"><span class="avatar sm blue">ML</span><div><b>From your PT</b><br>“Nice steady squats — I’ve added 2 reps.”</div></div>
     </div>
   </section>
   <section id="how" class="l-band-white"><div class="l-section">
-    <div class="l-center"><span class="l-kicker">How it works</span><h2 class="l-h2">One plan that learns from every session</h2></div>
-    <div class="l-steps">${STEPS.map(([t, d, bg, fg], i) => `<div class="l-step-wrap"><div class="l-step"><span class="num-badge" style="background:${bg};color:${fg}">${i + 1}</span><h3>${t}</h3><p>${d}</p></div>${i < 2 ? `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#a3ada7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>` : ""}</div>`).join("")}</div>
+    <div class="l-center" data-reveal><span class="l-kicker">How it works</span><h2 class="l-h2">One plan that learns from every session</h2></div>
+    <div class="l-steps">${STEPS.map(([t, d, bg, fg], i) => `<div class="l-step-wrap" data-reveal style="--d:${0.12 * (i + 1)}s"><div class="l-step"><span class="num-badge" style="background:${bg};color:${fg}">${i + 1}</span><h3>${t}</h3><p>${d}</p></div>${i < 2 ? `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#a3ada7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>` : ""}</div>`).join("")}</div>
   </div></section>
   <section id="patients" class="l-section l-split">
-    <div class="stack" style="gap:20px"><span class="eyebrow" style="color:var(--primary)">For patients</span><h2 class="l-h2">Practise with confidence, not guesswork</h2>${checks(PATIENT_PTS)}</div>
-    <div class="card" aria-hidden="true" style="border-radius:32px;padding:28px;display:flex;flex-direction:column;gap:18px">
+    <div class="stack" style="gap:20px" data-reveal="left"><span class="eyebrow" style="color:var(--primary)">For patients</span><h2 class="l-h2">Practise with confidence, not guesswork</h2>${checks(PATIENT_PTS)}</div>
+    <div class="card" aria-hidden="true" data-reveal="right" style="--d:.15s;border-radius:32px;padding:28px;display:flex;flex-direction:column;gap:18px">
       <div class="greet"><span class="sun-badge" style="width:50px;height:50px">${ICON.sun}</span><b style="font-size:1.5rem;letter-spacing:-.02em">Good morning, Sam</b></div>
       <div class="warm-block"><span><b style="display:inline;font-size:1rem">Warm-up</b> · 9 gentle moves · 5 min</span></div>
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;text-align:center">
@@ -74,25 +74,37 @@ function landingHTML() {
     </div>
   </section>
   <section id="providers" class="l-band-mint"><div class="l-section l-split" style="flex-wrap:wrap-reverse">
-    <div class="stack" aria-hidden="true" style="gap:12px">
+    <div class="stack l-samples" aria-hidden="true" style="gap:12px" data-reveal="left">
       ${SAMPLE.map(([n, p, r, c]) => `<div class="card sm" style="display:flex;align-items:center;gap:14px;padding:16px 18px"><span class="avatar">${n.split(" ").map((w) => w[0]).join("")}</span><div style="flex:1;min-width:0"><b>${n}</b><div class="muted" style="font-size:.875rem">${p}</div></div><span class="tag ${c}">${r}</span></div>`).join("")}
       <div class="card sm" style="display:flex;align-items:center;gap:12px;padding:16px 18px"><span style="color:var(--primary-strong);width:22px;height:22px">${ICON.sparkle}</span><span style="flex:1"><b>AI plan draft ready</b> · Shoulder extension 3 × 10 → 2 × 8, slow</span><span class="btn btn-primary sm">Review</span></div>
     </div>
-    <div class="stack" style="gap:20px"><span class="eyebrow">For providers</span><h2 class="l-h2">See what happens between visits</h2>${checks(PROVIDER_PTS)}</div>
+    <div class="stack" style="gap:20px;--d:.15s" data-reveal="right"><span class="eyebrow">For providers</span><h2 class="l-h2">See what happens between visits</h2>${checks(PROVIDER_PTS)}</div>
   </div></section>
   <section id="privacy" class="l-section stack" style="gap:32px">
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:20px"><span class="sun-badge" style="width:64px;height:64px;background:var(--accent-soft);color:var(--accent-strong)">${ICON.shield}</span>
+    <div data-reveal style="display:flex;flex-wrap:wrap;align-items:center;gap:20px"><span class="sun-badge" style="width:64px;height:64px;background:var(--accent-soft);color:var(--accent-strong)">${ICON.shield}</span>
       <div style="flex:1 1 400px"><h2 class="l-h2" style="font-size:clamp(1.75rem,3.2vw,2.375rem)">Private by design</h2><p class="muted" style="margin:6px 0 0;font-size:1.0625rem">All health data is encrypted and handled in accordance with HIPAA.</p></div></div>
-    <div class="l-privacy-cards">${PRIVACY.map(([t, d]) => `<div class="card"><h3>${t}</h3><p>${d}</p></div>`).join("")}</div>
+    <div class="l-privacy-cards">${PRIVACY.map(([t, d], i) => `<div class="card" data-reveal style="--d:${0.12 * (i + 1)}s"><h3>${t}</h3><p>${d}</p></div>`).join("")}</div>
   </section>
   <section class="l-section" style="padding-top:0">
-    <div class="l-cta-band"><div style="flex:1 1 420px"><h2>Ready for practice that keeps up with you?</h2><p>Ask your physical therapist for an invite code, or bring Kinetix to your clinic.</p></div>
+    <div class="l-cta-band" data-reveal><div style="flex:1 1 420px"><h2>Ready for practice that keeps up with you?</h2><p>Ask your physical therapist for an invite code, or bring Kinetix to your clinic.</p></div>
       <div style="display:flex;flex-wrap:wrap;gap:10px"><a class="btn btn-white md" href="#/signin?role=patient">I have an invite code</a><a class="btn btn-outline-white md" href="#/signin?role=provider">For clinics</a></div></div>
   </section>
   </main>
   <footer class="l-footer"><div class="l-footer-in"><span class="brand" style="font-size:.9375rem">${logo(30)}Kinetix</span>
     <nav aria-label="Footer"><a href="#privacy" data-anchor>Privacy</a><a href="#" data-soon="Terms">Terms</a><a href="#" data-soon="Contact">Contact</a></nav><span>© ${new Date().getFullYear()} Kinetix</span></div></footer>
 </div>`;
+}
+
+let revealer = null;
+/** Fade + slide each [data-reveal] block in the first time it scrolls into view (CSS: .reveal-on). */
+function revealOnScroll(page) {
+  revealer?.disconnect();
+  if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  page.classList.add("reveal-on");
+  revealer = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); revealer.unobserve(e.target); }
+  }, { threshold: 0.15, rootMargin: "0px 0px -8% 0px" });
+  page.querySelectorAll("[data-reveal]").forEach((el) => revealer.observe(el));
 }
 
 let landingShown = false;
@@ -105,6 +117,7 @@ function showLanding() {
       e.preventDefault(); document.getElementById(a.getAttribute("href").slice(1))?.scrollIntoView({ behavior: "smooth" });
     }));
     root.querySelectorAll("[data-soon]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); comingSoon(a.dataset.soon); }));
+    revealOnScroll(root.querySelector(".landing"));
     landingShown = true;
   }
   document.title = "Kinetix · Physical therapy, between visits";
