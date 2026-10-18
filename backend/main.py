@@ -14,8 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from oci_genai import generate_chat, generate_cue, generate_summary
+from oci_genai import generate_chat, generate_cue, generate_plan_phrasing, generate_summary
 from oci_storage import list_sessions, write_session
+from plan_rules import run_rules
 
 load_dotenv()
 
@@ -76,6 +77,13 @@ class ChatRequest(BaseModel):
 
 class SummaryRequest(BaseModel):
     session_context: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlanSuggestionsRequest(BaseModel):
+    plan: dict[str, Any] | None = None
+    sessions: list[dict[str, Any]] = Field(default_factory=list)
+    settings: dict[str, Any] = Field(default_factory=dict)
+    patient_first: str = ""
 
 
 class SessionPayload(BaseModel):
@@ -143,6 +151,23 @@ def coach_chat(body: ChatRequest) -> dict[str, str]:
 def coach_summary(body: SummaryRequest) -> dict[str, Any]:
     result, source = generate_summary(body.session_context)
     return {**result, "source": source}
+
+
+@app.post("/coach/plan-suggestions")
+def coach_plan_suggestions(body: PlanSuggestionsRequest) -> dict[str, Any]:
+    """
+    PT AI plan draft (T3): deterministic rules + OCI GenAI wording for why[] / patient message.
+    Frontend: web/planRules.js → planSuggestions() → Review AI plan.
+    """
+    rules = run_rules(
+        plan=body.plan,
+        sessions=body.sessions,
+        settings=body.settings,
+        patient_first=body.patient_first or "",
+    )
+    result, source = generate_plan_phrasing(rules)
+    result["source"] = source
+    return result
 
 
 @app.post("/sessions")

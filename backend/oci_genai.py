@@ -381,3 +381,74 @@ def generate_summary(session_context: dict[str, Any] | None) -> tuple[dict[str, 
         except Exception as e:  # noqa: BLE001
             print(f"[oci_genai] summary JSON parse failed: {e}")
     return fallback, "local"
+
+
+def generate_plan_phrasing(rules_result: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """
+    Keep deterministic rule suggestions; use OCI GenAI only to polish
+    each suggestion's `why[]` and the patient_message (PT report wording).
+    """
+    out = dict(rules_result)
+    suggestions = [dict(s) for s in (rules_result.get("suggestions") or [])]
+    out["suggestions"] = suggestions
+    if not _configured():
+        out["source"] = "local"
+        return out, "local"
+
+    compact = {
+        "since_last_plan": rules_result.get("since_last_plan"),
+        "reason": rules_result.get("reason"),
+        "patient_message": rules_result.get("patient_message"),
+        "suggestions": [
+            {
+                "id": s.get("id"),
+                "kind": s.get("kind"),
+                "progress": s.get("progress"),
+                "ex": s.get("ex"),
+                "from": s.get("from"),
+                "to": s.get("to"),
+                "why": s.get("why"),
+            }
+            for s in suggestions
+        ],
+    }
+    system = (
+        "You are an experienced physical therapist writing short clinical rationale "
+        "and a patient-facing message for a home-exercise plan review (Kinetix). "
+        "Use ONLY the JSON provided — do not invent new exercises, doses, or diagnoses. "
+        "Do not change suggestion ids, kinds, from/to doses, or add/remove suggestions. "
+        "Return strict JSON only (no markdown) with:\n"
+        "- patient_message: warm, clear message the PT can send (2-5 sentences).\n"
+        "- why_by_id: object mapping suggestion id → array of 1-3 short evidence bullets "
+        "(clinical but readable; keep facts from the input why[])."
+    )
+    user = (
+        "Rewrite the patient message and polish each why[] for this plan draft.\n"
+        f"{json.dumps(compact, ensure_ascii=False)[:10000]}"
+    )
+    text = _chat_oci(system, user, max_tokens=900)
+    if not text:
+        out["source"] = "local"
+        return out, "local"
+    try:
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+        data = json.loads(cleaned)
+        msg = str(data.get("patient_message") or "").strip()
+        if msg:
+            out["patient_message"] = msg
+        why_by_id = data.get("why_by_id") or {}
+        if isinstance(why_by_id, dict):
+            for s in suggestions:
+                sid = s.get("id")
+                polished = why_by_id.get(sid)
+                if isinstance(polished, list) and polished:
+                    s["why"] = [str(w).strip() for w in polished if str(w).strip()][:3]
+        out["source"] = "oci"
+        return out, "oci"
+    except Exception as e:  # noqa: BLE001
+        print(f"[oci_genai] plan phrasing JSON parse failed: {e}")
+        out["source"] = "local"
+        return out, "local"

@@ -43,7 +43,7 @@ export async function aiPlanRoute({ user, params }) {
         <div style="flex:1 1 300px"><div class="lbl">Plan suggestion · week ${d.profile.week} → week ${Math.min(d.profile.week + 1, d.profile.totalWeeks)}</div><h1 style="margin:2px 0 0;font-size:1.625rem;font-weight:700">Review ${esc(first)}’s next plan</h1></div>
         <div style="font-size:.9375rem;color:#4a524d;font-weight:600" aria-live="polite">${decided} of ${n} reviewed</div>
       </div>
-      <div class="note mint" style="font-size:.9375rem;border:1px solid #c9e8d2;background:#eef8f1">${ICON.sparkle}<span><b>Drafted by AI from ${sl.sessions} sessions and ${sl.checkins} check-ins.</b> Nothing changes for the patient until you approve. Suggestions follow your limits: no progression while pain is above ${d.settings.painLimit}/10.</span></div>
+      <div class="note mint" style="font-size:.9375rem;border:1px solid #c9e8d2;background:#eef8f1">${ICON.sparkle}<span><b>Drafted by AI from ${sl.sessions} sessions and ${sl.checkins} check-ins.</b> Wording: ${d.source === "oci" ? "OCI Generative AI" : "local rules"}. Nothing changes for the patient until you approve. Suggestions follow your limits: no progression while pain is above ${d.settings.painLimit}/10.</span></div>
       <div class="t3-grid">
         <section class="t3-main" aria-label="Suggestions">${d.suggestions.map(card).join("")}</section>
         <aside class="t3-side">

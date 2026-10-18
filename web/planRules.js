@@ -155,15 +155,16 @@ export async function planSuggestions(input) {
   const local = runRules(input);
   if (Date.now() < apiDownUntil) return local;   // don't wait on an API we just found missing
   try {
-    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 2000);
+    // GenAI wording can take a few seconds; local rules still return immediately on failure.
+    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 25000);
     const res = await fetch(`${API_BASE}/coach/plan-suggestions`, {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
       body: JSON.stringify({ plan: input.plan, sessions: input.sessions, settings: input.settings, patient_first: input.patientFirst }),
     });
     clearTimeout(t);
-    if (!res.ok) { apiDownUntil = Date.now() + 120000; return local; }
+    if (!res.ok) { apiDownUntil = Date.now() + 30000; return local; }
     const data = await res.json();
     if (!Array.isArray(data?.suggestions)) return local;
-    return { ...local, ...data, since_last_plan: data.since_last_plan || local.since_last_plan };
-  } catch { apiDownUntil = Date.now() + 120000; return local; }
+    return { ...local, ...data, since_last_plan: data.since_last_plan || local.since_last_plan, source: data.source || "oci" };
+  } catch { apiDownUntil = Date.now() + 30000; return local; }
 }
