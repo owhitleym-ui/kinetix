@@ -5,8 +5,9 @@ import { FilesetResolver, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 import { Calibrator, classify, decide, makeSegmenter, repFeatures } from "./features.js";
 import { MOBILITY, SetupGate, framing, rulesFor, validateRep } from "./session.js";
 import * as sessionMemory from "./sessionMemory.js";
-import { fetchChat, fetchCue, fetchSummary } from "./coach.js";
+import { fetchChat, fetchSummary } from "./coach.js";
 import { ensureMicPermission, listen as listenSpeech, supported as speechSupported } from "./speechInput.js";
+import { speakNatural, stopNatural, ttsHealth, FEMALE_VOICE } from "./naturalSpeak.js";
 
 const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm";
 const POSE_MODEL = "models/pose_landmarker_full.task";
@@ -59,6 +60,10 @@ const STEP = 5;   // angles are shown in 5° steps
 
 const $ = (s) => document.querySelector(s);
 const video = $("#video"), canvas = $("#canvas"), ctx = canvas.getContext("2d");
+const pageParams = new URLSearchParams(location.search);
+// Coach greets this name at session start (?name=… overrides).
+const COACH_NAME = (pageParams.get("name") || "Vaaisha").trim() || "Vaaisha";
+let welcomeQuietUntil = 0;   // don't let setup prompts talk over the opening greeting
 // Clear, professional names for what the model detects
 const LABELS = {
   CORRECT: "Good form",
@@ -132,35 +137,52 @@ async function loadModel(ex) {
 }
 
 // ---------- feedback UI ----------
-// Voice. Chrome's speech engine has three failure modes that made it go quiet mid-session:
-//  1. online ("Google …") voices cut out after a while  -> prefer an on-device voice (localService)
-//  2. an utterance can be garbage-collected before it plays -> keep a reference until it ends
-//  3. after many cancel() calls the engine can stay stuck "speaking" -> watchdog: cancel + resume if a line
-//     hasn't finished well past its expected length
-const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
-let voicePick = null, current = null, startedAt = 0, pendingTimer = null;
-function pickVoice() {
-  const vs = synth ? synth.getVoices().filter((v) => /^en/i.test(v.lang)) : [];
-  const local = vs.filter((v) => v.localService);
-  voicePick = local.find((v) => /en[-_]US/i.test(v.lang) && /Samantha|Ava|Allison|Susan|Zira|Aria|Jenny/i.test(v.name))
-    || local.find((v) => /en[-_]US/i.test(v.lang)) || local[0] || vs[0] || null;
+// OpenAI neural TTS only (female voice). Queued so lines never overlap. No browser speechSynthesis.
+function speak(text, { interrupt = false } = {}) {
+  if (!$("#voice")?.checked) return;
+  const line = String(text || "").trim();
+  if (!line) return;
+  return speakNatural(line, { voice: FEMALE_VOICE, interrupt });
 }
-if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
-function speak(text) {
-  if (!synth || !$("#voice").checked) return;
-  const u = new SpeechSynthesisUtterance(text);
-  if (voicePick) { u.voice = voicePick; u.lang = voicePick.lang; } else u.lang = "en-US";
-  u.rate = 1.05;
-  u.onstart = () => { startedAt = performance.now(); };
-  u.onend = u.onerror = () => { if (current === u) current = null; };
-  clearTimeout(pendingTimer);
-  const go = () => { current = u; startedAt = performance.now(); synth.resume(); synth.speak(u); };
-  if (synth.speaking || synth.pending) { synth.cancel(); pendingTimer = setTimeout(go, 80); } else go();
+function stopSpeak() { stopNatural(); }
+
+const GOOD_EXTRAS = [
+  "Keep it up!",
+  "Nice work!",
+  "That's the one — keep going!",
+  "Looking strong!",
+  "Great form — stay with it!",
+  "You've got this — keep it up!",
+];
+let goodExtraIdx = 0;
+function nextGoodExtra() {
+  const line = GOOD_EXTRAS[goodExtraIdx % GOOD_EXTRAS.length];
+  goodExtraIdx++;
+  return line;
 }
-// watchdog: a short line should finish within ~10 s; if the engine still claims to be busy, unstick it
-setInterval(() => {
-  if (synth && (synth.speaking || synth.pending) && performance.now() - startedAt > 10000) { synth.cancel(); synth.resume(); current = null; }
-}, 2000);
+
+/** Friendly coaching sentences for spoken feedback (UI can still show short cues). */
+const COACH_SAY = {
+  ERR_KNEES_INSIDE: "You might want to push your knees out a bit more on the next rep, so they track over your toes.",
+  ERR_KNEES_FORWARD: "Try sitting back into your hips a little more next time, so your knees stay behind your toes.",
+  ERR_LIFTED_HEELS: "See if you can keep your heels planted on the floor for the next rep.",
+  ERR_SHALLOW_SQUAT: "You might want to go a little deeper next rep — sit back until your thighs are near parallel.",
+  ERR_TORSO_TO_SIDE: "Try to keep your torso centered next time — avoid leaning to one side.",
+  ERR_ARM_FORWARD: "On the next rep, raise your arm out to the side in line with your body, not out in front.",
+  ERR_BENT_ARM: "You might want to keep your elbow a bit straighter on the next rep.",
+  ERR_ELEVATED_SHOULDER: "Try keeping that shoulder down next time — no shrug.",
+  ERR_HEAD_TO_SIDE: "See if you can keep your head straight on the next rep, without tilting.",
+  ERR_LOW_ABDUCTION: "You might want to lift your arm a little higher next time, at least to shoulder level.",
+  ERR_ARM_TO_SIDE: "On the next rep, move your arm straight back, close to your body.",
+  ERR_TORSO_FORWARD: "Try keeping your torso upright next time — avoid bending forward.",
+  ERR_TORSO_ROTATION: "See if you can keep your chest facing forward on the next rep, without twisting.",
+};
+
+function coachSentence(label, fallbackCue) {
+  if (COACH_SAY[label]) return COACH_SAY[label];
+  if (fallbackCue) return `For the next rep, ${fallbackCue.charAt(0).toLowerCase()}${fallbackCue.slice(1).replace(/\.$/, "")}.`;
+  return `You might want to adjust your form a little on the next rep.`;
+}
 
 function showCount(sub = "") {
   $("#countNum").textContent = repCount;
@@ -177,13 +199,19 @@ function showChip(text, kind, ms = 3000) {   // fades in, holds, fades out; no f
 let lastSetupSpoken = "", lastSetupAt = 0;
 function showSetup(g) {
   // say setup instructions out loud too (only when they change, at most every 2.5 s)
-  if (g.title !== lastSetupSpoken && performance.now() - lastSetupAt > 2500) {
+  // skip while the session-opening greeting is still playing
+  if (performance.now() >= welcomeQuietUntil
+      && g.title !== lastSetupSpoken && performance.now() - lastSetupAt > 2500) {
     speak(g.title === "Hold still" ? "Hold still" : `${g.title}. ${g.sub}`);
     lastSetupSpoken = g.title; lastSetupAt = performance.now();
   }
   $("#setup").hidden = false;
   $("#setupTitle").textContent = g.title; $("#setupSub").textContent = g.sub;
   $("#setupBar").style.width = `${Math.round((g.progress || 0) * 100)}%`;
+}
+
+function pageWelcomeLine() {
+  return `${COACH_NAME}, how are you? Make sure you fit yourself in the screen so we can calibrate your movements. I'll start counting your reps whenever you're ready — just press Start session when you want to begin.`;
 }
 const hideSetup = () => { $("#setup").hidden = true; };
 
@@ -215,13 +243,13 @@ function onPose(res, t) {
   if (outFrames > 15) {
     phase = "setup"; seg.reset(); gate.reset();
     showSetup({ title: "Paused", sub: "Step back so your whole body is in the frame.", progress: 0 });
-    speak("Paused. Step back into the frame.", true);
+    speak("Paused. Step back into the frame.", { interrupt: true });
     return;
   }
 
   const rep = seg.push(P, t);
   if (model.segmenter.mode === "tempo") {
-    if (seg.takeCue()) { speak(model.segmenter.cue, true); showChip(model.segmenter.cue, "info", 1200); }
+    if (seg.takeCue()) { speak(model.segmenter.cue, { interrupt: true }); showChip(model.segmenter.cue, "info", 1200); }
     $("#state").textContent = seg.inRep ? "move now" : "get ready";
     $("#angle").textContent = seg.value === null ? "–" : `${seg.value.toFixed(0)} s`;
   } else {
@@ -286,28 +314,11 @@ function onMovement(frames) {
     top_probs: topProbs,
   });
 
-  // Spoken cue: GenAI paraphrase (≤10 words) with local fallback; UI stays on classifier copy.
-  const cuePayload = {
-    exercise: model.exercise,
-    rep: repCount,
-    label: out.label,
-    short: good ? "Good form" : (model.short[out.label] || ""),
-    cue: fixCue,
-    good,
-    probs: Object.fromEntries(topProbs.map((t) => [t.label, t.p])),
-    reps_done: repCount,
-    reps_target: setSize(),
-  };
-  const localSpoken = good
-    ? `${repCount}. Good.${done ? " Set complete." : ""}`
-    : `${repCount}. ${model.short[out.label]}.${done ? " Set complete." : ""}`;
-  speak(localSpoken);
-  const cueToken = ++cueRequestId;
-  fetchCue(cuePayload).then((r) => {
-    if (cueToken !== cueRequestId || !r.text || r.source === "local") return;
-    // Upgrade spoken line if GenAI returned a short cue (skip if set already done — summary speaks next).
-    if (!done) speak(`${repCount}. ${r.text}`);
-  });
+  // Spoken coaching: natural sentences (not raw chip text). Queued so it won't overlap.
+  const spoken = good
+    ? `${repCount}. Good form. ${nextGoodExtra()}${done ? " Set complete." : ""}`
+    : `${repCount}. ${coachSentence(out.label, fixCue)}${done ? " Set complete." : ""}`;
+  speak(spoken);
 
   if (done) showSetSummary();
 }
@@ -345,7 +356,7 @@ function resetCoachUi() {
   $("#setSummaryBody").textContent = "";
   $("#setSummaryTips").innerHTML = "";
   if (micHandle) { micHandle.stop(); micHandle = null; }
-  $("#coachMic")?.classList.remove("listening");
+  setVoiceCmdListening(false);
 }
 
 function appendCoachMsg(role, text) {
@@ -426,7 +437,14 @@ function micErrorMessage(err) {
   return `Mic error: ${err}`;
 }
 
-$("#coachMic")?.addEventListener("click", async () => {
+function setVoiceCmdListening(on) {
+  $("#coachMic")?.classList.toggle("listening", on);
+  $("#coachMic")?.setAttribute("aria-pressed", String(on));
+  $("#voiceCmd")?.classList.toggle("listening", on);
+  if ($("#voiceCmd")) $("#voiceCmd").textContent = on ? "Listening…" : "Voice command";
+}
+
+async function startVoiceCommand() {
   if (!speechSupported()) {
     appendCoachMsg("system", "Speech recognition needs Chrome or Edge. You can still type questions below.");
     $("#coachInput")?.focus();
@@ -434,19 +452,19 @@ $("#coachMic")?.addEventListener("click", async () => {
   }
   if (micHandle) {
     stopMic();
+    setVoiceCmdListening(false);
     return;
   }
 
-  try { synth?.cancel(); } catch { /* ignore */ }
-
-  $("#coachMic").classList.add("listening");
-  $("#coachMic").setAttribute("aria-pressed", "true");
+  stopSpeak();
+  setVoiceCmdListening(true);
   appendCoachMsg("system", "Requesting mic…");
 
   try {
     await ensureMicPermission();
   } catch (e) {
     stopMic();
+    setVoiceCmdListening(false);
     const name = e?.name || "";
     const msg = (name === "NotAllowedError" || name === "SecurityError")
       ? micErrorMessage("not-allowed")
@@ -459,36 +477,47 @@ $("#coachMic")?.addEventListener("click", async () => {
   clearListeningHint();
   appendCoachMsg("system", "Listening… speak now.");
 
-  let gotFinal = false;
   const handle = listenSpeech({
     onInterim: (text) => {
       if (text) $("#coachInput").value = text;
     },
     onResult: (text) => {
-      gotFinal = true;
       $("#coachInput").value = text;
       clearListeningHint();
       askCoach(text);
     },
     onError: (err) => {
       clearListeningHint();
+      setVoiceCmdListening(false);
       const msg = micErrorMessage(err);
       if (msg) appendCoachMsg("system", msg);
       if (err === "network" || err === "not-allowed") $("#coachInput")?.focus();
     },
     onEnd: () => {
       micHandle = null;
-      $("#coachMic")?.classList.remove("listening");
-      $("#coachMic")?.setAttribute("aria-pressed", "false");
+      setVoiceCmdListening(false);
     },
   });
 
   if (!handle) {
     stopMic();
+    setVoiceCmdListening(false);
     appendCoachMsg("system", micErrorMessage("unsupported"));
     return;
   }
   micHandle = handle;
+}
+
+$("#coachMic")?.addEventListener("click", () => startVoiceCommand());
+$("#voiceCmd")?.addEventListener("click", () => startVoiceCommand());
+
+// Show whether neural TTS proxy is up (Voice checkbox still gates speaking).
+ttsHealth().then((h) => {
+  const el = $("#ttsStatus");
+  if (!el) return;
+  if (h?.keyConfigured) el.textContent = "Natural voice ready";
+  else if (h) el.textContent = "TTS proxy up — add OPENAI_API_KEY";
+  else el.textContent = "Natural voice offline (browser voice fallback)";
 });
 
 // Learn this user's normal from their valid reps (silently). A rep much smaller than the others isn't used.
@@ -621,7 +650,9 @@ window.addEventListener("resize", () => { if (video.videoWidth) fitStage(); });
 async function start() {
   try {
     $("#start").disabled = true;
-    speak("Starting");                     // spoken inside the click, which also unlocks audio in the browser
+    // Click unlocks audio if the page-load welcome was blocked; keep setup quiet briefly.
+    welcomeQuietUntil = performance.now() + 4000;
+    speak("Alright — let's get set up. Show me your whole body in the frame.", { interrupt: false });
     await loadLandmarker();
     seg.reset(); gate.reset(); cal = new Calibrator(model.calibration); calAmps = [];
     phase = "setup"; outFrames = 0; repCount = 0; lastTime = -1; facingHist = []; smoothImg = null; shownAngle = {}; smoothAngle = {};
@@ -852,3 +883,27 @@ $("#testWrap").hidden = !TEST; $("#resetTally").hidden = !TEST;
 if (params.get("expected")) $("#expected").value = params.get("expected");
 if (params.get("autostart") || params.has("test") || params.has("expected")) leaveWarmup();
 if (params.get("autostart")) start();
+
+// Page-load welcome (neural TTS only). Browsers may block audio until a click — retry on first tap.
+async function greetOnLoad() {
+  const line = pageWelcomeLine();
+  welcomeQuietUntil = performance.now() + 18000;
+  try { appendCoachMsg("system", line); } catch { /* coach UI may not be ready */ }
+  if (!$("#voice")?.checked) return;
+
+  const play = () => speakNatural(line, { voice: FEMALE_VOICE, interrupt: true });
+  const result = await play();
+  if (result?.ok) {
+    const tip = $("#ttsStatus");
+    if (tip) tip.textContent = `Natural voice ready (${FEMALE_VOICE})`;
+    return;
+  }
+  const unlock = async () => {
+    document.removeEventListener("pointerdown", unlock);
+    await play();
+  };
+  document.addEventListener("pointerdown", unlock, { once: true });
+  const tip = $("#ttsStatus");
+  if (tip) tip.textContent = "Tap anywhere to hear your coach";
+}
+greetOnLoad();

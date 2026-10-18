@@ -1,0 +1,6 @@
+.env
+out/
+server/node_modules/
+*.mp3
+*.wav
+*.log

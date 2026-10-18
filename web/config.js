@@ -3,3 +3,8 @@
 if (!["127.0.0.1", "localhost"].includes(location.hostname)) {
   window.FORM_CHECK_API = "https://207-211-163-177.sslip.io";
 }
+
+// Neural TTS proxy (voice-feedback/server). Local only unless you deploy a TTS endpoint.
+if (["127.0.0.1", "localhost"].includes(location.hostname)) {
+  window.FORM_CHECK_TTS = "http://127.0.0.1:3002";
+}

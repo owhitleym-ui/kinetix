@@ -77,6 +77,7 @@
   .btn.primary:hover { background: #1d4ed8; }
   .btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--line-2); }
   .btn:disabled { opacity: .4; cursor: default; }
+  #voiceCmd.listening { background: var(--bad-soft); border-color: var(--bad); color: var(--bad-text); }
   select { font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; }
 
   /* layout */
@@ -531,6 +532,8 @@
     </div>
     <label class="file" id="fileWrap" hidden><input type="file" id="file" accept="video/*"><span id="fileName">Choose a video…</span></label>
     <label class="switch"><input type="checkbox" id="voice" checked><span class="track"></span>Voice</label>
+    <button type="button" class="btn ghost" id="voiceCmd" title="Click, allow mic, then ask the coach out loud">Voice command</button>
+    <span id="ttsStatus" class="muted" style="font-size:12.5px;align-self:center"></span>
     <label id="testWrap" class="ctl" hidden><span>Test</span><select id="expected"></select></label>
     <div class="actions">
       <button class="btn ghost" id="resetTally" hidden>Reset tally</button>
@@ -581,6 +584,7 @@
           </button>
           <button type="submit" class="send" id="coachSend">Ask</button>
         </form>
+        <p class="muted" style="margin:8px 0 0;font-size:12.5px">Or press <b>Voice command</b> above — same as the mic.</p>
       </div>
 
       <h2 class="side-title" style="margin-top:18px">Rep log</h2>

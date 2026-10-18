@@ -43,3 +43,9 @@ branch/api/*.pem
 branch/api/oci_api_key.pem
 branch/api/node_modules/
 
+
+# Voice feedback TTS secrets
+voice-feedback/.env
+voice-feedback/out/
+voice-feedback/server/node_modules/
+

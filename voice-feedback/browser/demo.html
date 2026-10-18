@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Voice Feedback — natural TTS demo</title>
+  <style>
+    :root { font-family: "Segoe UI", system-ui, sans-serif; color: #0f172a; background: #f8fafc; }
+    body { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.35rem; }
+    p { color: #475569; line-height: 1.5; }
+    label { display: block; margin: 1rem 0 0.35rem; font-weight: 600; }
+    textarea, select { width: 100%; box-sizing: border-box; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+    button { margin-top: 1rem; padding: 0.65rem 1.1rem; border: 0; border-radius: 8px; background: #0ea5e9; color: #fff; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    #status { margin-top: 1rem; font-size: 0.9rem; color: #64748b; }
+    code { background: #e2e8f0; padding: 0.1rem 0.35rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Natural coach voice (OpenAI TTS)</h1>
+  <p>
+    Start the proxy first: <code>cd voice-feedback/server && npm start</code>
+    with <code>OPENAI_API_KEY</code> in <code>voice-feedback/.env</code>.
+  </p>
+
+  <label for="text">Cue / reply to speak</label>
+  <textarea id="text" rows="3">Knees out. Push them over your toes.</textarea>
+
+  <label for="voice">Voice</label>
+  <select id="voice">
+    <option value="coral" selected>coral</option>
+    <option value="sage">sage</option>
+    <option value="ash">ash</option>
+    <option value="alloy">alloy</option>
+    <option value="echo">echo</option>
+    <option value="fable">fable</option>
+    <option value="onyx">onyx</option>
+    <option value="nova">nova</option>
+    <option value="shimmer">shimmer</option>
+  </select>
+
+  <button id="go" type="button">Speak</button>
+  <div id="status">Checking TTS proxy…</div>
+
+  <script type="module">
+    import { speakNatural, TTS_BASE } from "./naturalSpeak.js";
+
+    const status = document.getElementById("status");
+    const go = document.getElementById("go");
+
+    try {
+      const h = await fetch(`${TTS_BASE}/health`).then((r) => r.json());
+      status.textContent = h.keyConfigured
+        ? `Proxy OK · ${h.model} / ${h.voice}`
+        : "Proxy up but OPENAI_API_KEY is missing in voice-feedback/.env";
+    } catch {
+      status.textContent = "Proxy not reachable on :3002 — run npm start in voice-feedback/server";
+    }
+
+    go.addEventListener("click", async () => {
+      go.disabled = true;
+      status.textContent = "Generating audio…";
+      const text = document.getElementById("text").value;
+      const voice = document.getElementById("voice").value;
+      const r = await speakNatural(text, { voice });
+      status.textContent = r.ok ? `Played via ${r.source}` : `Failed: ${r.reason}`;
+      go.disabled = false;
+    });
+  </script>
+</body>
+</html>
