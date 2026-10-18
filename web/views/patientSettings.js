@@ -105,7 +105,10 @@ export function patientSettingsRoute({ user }) {
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
     root.querySelector("[data-delrec]").onclick = () => toast("No recordings are stored by Kinetix — video stays on your device.", 4000);
-    root.querySelector("[data-msg]").onclick = () => comingSoon("Messaging");
+    root.querySelector("[data-msg]").onclick = () => {
+      if (pt?.id) go(`#/patient/messages?with=${encodeURIComponent(pt.id)}`);
+      else go("#/patient/messages");
+    };
     root.querySelector("[data-invite]").onclick = (e) => { const f = root.querySelector("[data-inviteform]"); f.hidden = !f.hidden; e.currentTarget.setAttribute("aria-expanded", String(!f.hidden)); if (!f.hidden) f.querySelector("input").focus(); };
     root.querySelector("[data-inviteform]").addEventListener("submit", (e) => { e.preventDefault(); toast(pt ? `You’re already linked to ${ptName}.` : "Invite code saved."); e.currentTarget.hidden = true; });
     root.querySelector("[data-signout2]").onclick = () => { signOut(); resetMode(); go("#/"); };

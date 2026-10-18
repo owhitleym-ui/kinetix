@@ -11,25 +11,24 @@ import { patientDetailRoute } from "./patientDetail.js";
 import { aiPlanRoute } from "./aiPlan.js";
 import { providerSettingsRoute } from "./providerSettings.js";
 import { progressRoute } from "./progress.js";
-import { stubPage } from "./chrome.js";
+import { messagesRoute } from "./messages.js";
 
 /** Patients get their own text size everywhere; everyone else sees the default. */
 export function applyUserPrefs(user) {
   applyTextSize(user?.role === "patient" ? getSettings(user.dataId).textSize : 0);
 }
 const page = (fn) => (ctx) => { showScreen("app"); applyUserPrefs(ctx.user); return fn(ctx); };
-const stub = (what, active) => page(({ user }) => stubPage(what, { active, user }));
 
 route("/", page(landingRoute));
 route("/signin", page(signinRoute));
 route("/patient", page(patientHomeRoute), { role: "patient" });
 route("/patient/progress", page(progressRoute), { role: "patient" });
-route("/patient/messages", stub("Messages", "messages"), { role: "patient" });
+route("/patient/messages", page(messagesRoute), { role: "patient" });
 route("/patient/summary", page(summaryRoute), { role: "patient" });
 route("/patient/settings", page(patientSettingsRoute), { role: "patient" });
 route("/provider", page(caseloadRoute), { role: "pt" });
 route("/provider/drafts", page(draftsRoute), { role: "pt" });
-route("/provider/messages", stub("Messages", "messages"), { role: "pt" });
+route("/provider/messages", page(messagesRoute), { role: "pt" });
 route("/provider/patient/:id", page(patientDetailRoute), { role: "pt" });
 route("/provider/plan/:draftId", page(aiPlanRoute), { role: "pt" });
 route("/provider/settings", page(providerSettingsRoute), { role: "pt" });

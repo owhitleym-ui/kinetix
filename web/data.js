@@ -10,7 +10,7 @@ import { exName } from "./exerciseText.js";
 
 const KEY = "kinetix.demo.v1";
 const DAY = 864e5;
-const DATE_KEYS = new Set(["startedAt", "endedAt", "createdAt", "at", "nextVisit", "visitDate", "linkedAt", "decidedAt", "approvedAt"]);
+const DATE_KEYS = new Set(["startedAt", "endedAt", "createdAt", "at", "nextVisit", "visitDate", "linkedAt", "decidedAt", "approvedAt", "readAt"]);
 let db = null;
 
 function shiftDates(node, ms) {   // keep the seeded story relative to today
@@ -233,4 +233,83 @@ export async function approveDraft(ptId, id) {
   save();
   await viaAtp(`/api/drafts/${encodeURIComponent(id)}/approve`, { method: "POST", body: JSON.stringify({ message: draft.message }) }, () => null);
   return d.plans[pid][d.plans[pid].length - 1];
+}
+
+// ---------- messages (patient ↔ PT, demo store) ----------
+function allMessages() {
+  const d = store();
+  if (!Array.isArray(d.messages)) d.messages = [];
+  return d.messages;
+}
+/** Chronological messages for a care-team pair. */
+export function messagesBetween(patientId, ptId) {
+  return allMessages()
+    .filter((m) => m.patientId === patientId && m.ptId === ptId)
+    .sort((a, b) => a.at.localeCompare(b.at));
+}
+/** Whether viewer may message this counterpart (care-team only). */
+export function canMessage(viewerId, counterpartId) {
+  const u = userRecord(viewerId);
+  if (!u || !counterpartId) return false;
+  if (u.role === "patient") return careTeam(viewerId)?.ptId === counterpartId;
+  if (u.role === "pt") return patientsOf(viewerId).includes(counterpartId);
+  return false;
+}
+/** Resolve patientId + ptId for a viewer opening a thread with counterpart. */
+export function threadPair(viewerId, counterpartId) {
+  const u = userRecord(viewerId);
+  if (!u || !canMessage(viewerId, counterpartId)) return null;
+  if (u.role === "patient") return { patientId: viewerId, ptId: counterpartId };
+  return { patientId: counterpartId, ptId: viewerId };
+}
+/** Inbox rows for a user: one per care-team counterpart, newest activity first. */
+export function threadsFor(userId) {
+  const u = userRecord(userId);
+  if (!u) return [];
+  const counterparts = u.role === "pt"
+    ? patientsOf(userId)
+    : (careTeam(userId)?.ptId ? [careTeam(userId).ptId] : []);
+  return counterparts.map((cid) => {
+    const pair = threadPair(userId, cid);
+    const msgs = pair ? messagesBetween(pair.patientId, pair.ptId) : [];
+    const last = msgs[msgs.length - 1] || null;
+    const unread = msgs.filter((m) => m.from !== userId && !m.readAt).length;
+    return {
+      counterpartId: cid,
+      counterpart: userRecord(cid),
+      patientId: pair?.patientId,
+      ptId: pair?.ptId,
+      last,
+      unread,
+    };
+  }).sort((a, b) => {
+    const ta = a.last?.at || "";
+    const tb = b.last?.at || "";
+    if (tb !== ta) return tb.localeCompare(ta);
+    return (a.counterpart?.name || "").localeCompare(b.counterpart?.name || "");
+  });
+}
+export function sendMessage({ from, patientId, ptId, text }) {
+  const body = (text || "").trim();
+  if (!body || !from || !patientId || !ptId) return null;
+  if (!canMessage(from, from === patientId ? ptId : patientId)) return null;
+  const msg = {
+    id: `msg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    patientId, ptId, from, text: body,
+    at: new Date().toISOString(),
+    readAt: null,
+  };
+  allMessages().push(msg);
+  save();
+  return msg;
+}
+/** Mark messages in the thread as read for the viewer (messages they did not send). */
+export function markThreadRead(viewerId, patientId, ptId) {
+  const now = new Date().toISOString();
+  let n = 0;
+  for (const m of messagesBetween(patientId, ptId)) {
+    if (m.from !== viewerId && !m.readAt) { m.readAt = now; n += 1; }
+  }
+  if (n) save();
+  return n;
 }

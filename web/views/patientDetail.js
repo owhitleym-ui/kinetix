@@ -97,6 +97,8 @@ export async function patientDetailRoute({ user, params }) {
       </section>
     </div>`, { active: "patients", user, title: pu.name });
   root.querySelector("[data-edit]").onclick = () => comingSoon("Manual plan editing");
-  root.querySelector("[data-message]")?.addEventListener("click", () => comingSoon("Messaging"));
+  root.querySelector("[data-message]")?.addEventListener("click", () => {
+    go(`#/provider/messages?with=${encodeURIComponent(o.id)}`);
+  });
   root.querySelectorAll("[data-clips]").forEach((b) => b.addEventListener("click", () => comingSoon("Watching clips")));
 }

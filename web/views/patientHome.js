@@ -1,5 +1,5 @@
 // P1 · Patient home: greeting, Today's plan (warm-up, then numbered exercises), PT feedback card, Your week.
-import { ICON, comingSoon, esc, greeting, initials, longDate, niceDate, ring } from "../ui.js";
+import { ICON, esc, greeting, initials, longDate, niceDate, ring } from "../ui.js";
 import { exIcon, dose } from "../exerciseText.js";
 import { getPatientHome } from "../data.js";
 import { renderPage } from "./chrome.js";
@@ -52,5 +52,8 @@ export async function patientHomeRoute({ user }) {
       </aside>
     </div>`, { active: "today", user, title: "Today" });
   root.querySelector("[data-start]")?.addEventListener("click", () => { beginPlanRun(pid, h.plan); go("#/patient/warmup"); });
-  root.querySelector("[data-message]")?.addEventListener("click", () => comingSoon("Messaging"));
+  root.querySelector("[data-message]")?.addEventListener("click", () => {
+    if (h.pt?.id) go(`#/patient/messages?with=${encodeURIComponent(h.pt.id)}`);
+    else go("#/patient/messages");
+  });
 }

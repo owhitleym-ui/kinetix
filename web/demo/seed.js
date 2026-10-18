@@ -192,7 +192,30 @@ export function buildSeed(now = Date.now()) {
   }
   settings[PT_ID] = defaultPtSettings();
   sessions.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-  return { version: 1, seededAt: new Date(now).toISOString(), users, careTeam, profiles, plans, sessions, settings, drafts: {}, messages: [] };
+  const messages = buildMessages(now);
+  return { version: 1, seededAt: new Date(now).toISOString(), users, careTeam, profiles, plans, sessions, settings, drafts: {}, messages };
+}
+
+/** A few care-team threads so the Messages inbox isn’t empty in the demo. */
+function buildMessages(now) {
+  const msg = (id, patientId, from, text, daysAgo, hour, min, readDaysAgo = null) => ({
+    id, patientId, ptId: PT_ID, from, text,
+    at: iso(now, daysAgo, hour, min),
+    readAt: readDaysAgo == null ? null : iso(now, readDaysAgo, hour, min + 5),
+  });
+  return [
+    // Sam ↔ Dr. Lee — pain concern; latest from Sam still unread for the PT
+    msg("msg-sam-1", "p-sam", PT_ID, "Sam, I saw your last two check-ins — pain at 5. How is the shoulder feeling today?", 2, 10, 15, 2),
+    msg("msg-sam-2", "p-sam", "p-sam", "Still sore after extension. Squats feel okay though.", 2, 11, 40, 2),
+    msg("msg-sam-3", "p-sam", PT_ID, "Thanks for telling me. Skip the last set of extension if it climbs above a 4, and ice after.", 2, 14, 5, 1),
+    msg("msg-sam-4", "p-sam", "p-sam", "Will do. Should I still come in Tuesday if it’s still at a 5?", 0.3, 19, 20, null),
+    // Jordan ↔ Dr. Lee — short on-track exchange, all read
+    msg("msg-jor-1", "p-jordan", "p-jordan", "Hi Dr. Lee — abduction felt smoother this week. Any reason not to keep the same plan?", 4, 16, 0, 4),
+    msg("msg-jor-2", "p-jordan", PT_ID, "That’s great to hear. Stay with this plan through your next visit — keep the lift pain-free.", 3, 9, 30, 3),
+    // Priya ↔ Dr. Lee — quick check-in
+    msg("msg-pri-1", "p-priya", PT_ID, "Priya, your range looks better on the last few sessions. Keep the slow, smooth reps.", 5, 11, 0, 5),
+    msg("msg-pri-2", "p-priya", "p-priya", "Thank you! Reaching the top shelf is getting easier.", 4, 18, 45, 4),
+  ];
 }
 
 export function defaultPatientSettings() {
