@@ -5,8 +5,39 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import https from "https";
 import path from "path";
 import { fileURLToPath } from "url";
+
+/** Node <18 on OCI may lack global fetch — use https for OpenAI. */
+function openaiSpeech(payload, apiKey) {
+  const data = JSON.stringify(payload);
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: "api.openai.com",
+        path: "/v1/audio/speech",
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(data),
+        },
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const buf = Buffer.concat(chunks);
+          resolve({ status: res.statusCode || 500, buf });
+        });
+      },
+    );
+    req.on("error", reject);
+    req.write(data);
+    req.end();
+  });
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../.env") });
@@ -79,25 +110,16 @@ app.post("/tts", async (req, res) => {
   }
 
   try {
-    const r = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!r.ok) {
-      const errText = await r.text();
+    const r = await openaiSpeech(body, key);
+    if (r.status < 200 || r.status >= 300) {
+      const errText = r.buf.toString("utf8");
       console.error("OpenAI TTS error", r.status, errText);
       return res.status(r.status).json({ error: "openai_tts_failed", detail: errText.slice(0, 500) });
     }
 
-    const buf = Buffer.from(await r.arrayBuffer());
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    res.send(buf);
+    res.send(r.buf);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message });
