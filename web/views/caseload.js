@@ -12,10 +12,10 @@ export async function caseloadRoute({ user }) {
   const me = userRecord(ptId);
   const sorted = [...rows].sort((a, b) => (b.flags.length - a.flags.length) || a.user.name.localeCompare(b.user.name));
   const row = (r) => `<a class="pt-row" href="#/provider/patient/${encodeURIComponent(r.id)}" data-name="${esc(r.user.name.toLowerCase())} ${esc((r.profile?.program || "").toLowerCase())}">
-      <span class="who"><span class="avatar sm">${esc(initials(r.user.name))}</span><span style="min-width:0"><b>${esc(r.user.name)}</b><small>${esc(r.profile?.program || "")} · week ${r.profile?.week ?? "–"}</small></span></span>
+      <span class="who"><span class="avatar sm">${esc(initials(r.user.name))}</span><span style="min-width:0"><b>${esc(r.user.name)}</b><small>${esc(r.profile?.program || "")} · week ${r.profile?.week ?? "-"}</small></span></span>
       <span style="color:#4a524d">${r.last ? relDay(r.last.startedAt) : "No sessions"}</span>
       <span class="status"><span class="dot" style="background:${DOT[r.status.kind]}"></span>${esc(r.status.text)}</span>
-      <span>${r.draft ? '<span class="tag mint">Draft ready</span>' : '<span class="muted">—</span>'}</span>${ICON.chev}</a>`;
+      <span>${r.draft ? '<span class="tag mint">Draft ready</span>' : '<span class="muted">. </span>'}</span>${ICON.chev}</a>`;
 
   const root = renderPage(`
     <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px">

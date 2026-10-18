@@ -23,7 +23,7 @@ export function summaryRoute({ user, query }) {
   const prev = prior[prior.length - 1];
   const prev10 = prev ? Math.round(ratio(prev) * 10) : null;
   const diff = prev10 == null ? null : in10 - prev10;
-  const cmpText = diff == null ? "Your first session — a great start." : diff > 0 ? `${WORDS[Math.min(diff, 5)]} more good rep${diff > 1 ? "s" : ""} in every 10.` : diff === 0 ? "Same as last time — steady work." : "A few more to fix than last time. The tips below can help.";
+  const cmpText = diff == null ? "Your first session. A great start." : diff > 0 ? `${WORDS[Math.min(diff, 5)]} more good rep${diff > 1 ? "s" : ""} in every 10.` : diff === 0 ? "Same as last time. Steady work." : "A few more to fix than last time. The tips below can help.";
   const repsText = !target ? "" : done >= target ? "You did every rep." : done / target >= 0.9 ? "You did almost every rep." : `You finished ${done} of ${target} reps.`;
   let pain = s.checkin?.pain ?? (query.hurt ? 8 : null), effort = s.checkin?.effort ?? null;
 
@@ -48,7 +48,7 @@ export function summaryRoute({ user, query }) {
           ${s.exercises.map((e) => {
             const g = e.done ? Math.round(e.good / e.done * 100) : 0;
             const top = [...(e.mistakes || [])].sort((a, b) => b.n - a.n)[0];
-            const tip = !e.done ? "Not started this time." : top ? `${plainCue(top.code)}. ${plainLine(top.code)}` : "Great — your form stayed steady.";
+            const tip = !e.done ? "Not started this time." : top ? `${plainCue(top.code)}. ${plainLine(top.code)}` : "Great. Your form stayed steady.";
             return `<div class="tips-row"><b>${esc(e.name)}</b><div class="bar-track" role="img" aria-label="${g}% good reps"><span style="width:${g}%;background:var(--primary)"></span><span style="width:${e.done ? 100 - g : 0}%;background:var(--warn)"></span></div><div style="color:#4a524d;line-height:1.35">${esc(tip)}</div></div>`;
           }).join("")}
         </section>
@@ -57,7 +57,7 @@ export function summaryRoute({ user, query }) {
         <div><h2 style="font-size:1.3125rem;font-weight:800;margin:0 0 4px">How did it feel?</h2><p class="muted" style="margin:0;font-size:.875rem">${shareOn ? `Shared with ${esc(ptName)} to help adjust your plan.` : `Saved to your history. Sharing with ${esc(ptName)} is off in Settings.`}</p></div>
         <fieldset class="plain"><legend>Pain during exercises</legend>
           <div class="faces" role="radiogroup" aria-label="Pain from 0 to 10" style="grid-template-columns:repeat(6,minmax(0,1fr))">
-            ${PAIN_FACES.map((f) => `<button type="button" class="face-btn" role="radio" aria-checked="${pain === f.v}" aria-label="${f.v} — ${f.word}" data-pain="${f.v}">${face(f, 40)}<span>${f.v}</span></button>`).join("")}
+            ${PAIN_FACES.map((f) => `<button type="button" class="face-btn" role="radio" aria-checked="${pain === f.v}" aria-label="${f.v}. ${f.word}" data-pain="${f.v}">${face(f, 40)}<span>${f.v}</span></button>`).join("")}
           </div><div class="row-between lbl"><span>No pain</span><span>Worst pain</span></div></fieldset>
         <fieldset class="plain"><legend>How hard was today?</legend>
           <div class="faces" role="radiogroup" aria-label="How hard was today" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">

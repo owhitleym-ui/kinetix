@@ -22,7 +22,7 @@ export function openRecordChoice({ ptName = "your PT", choice = "share", onCamer
     <p style="margin:0;font-size:.875rem;line-height:1.45;color:#4a524d">Either way, your rep counts, form scores and check-ins are shared with ${esc(ptName)}.</p>
     <div class="note mint" style="color:#244232">${ICON.shield}<span><b>Your video never leaves this device.</b>
       <button type="button" class="link-btn" style="min-height:0" data-details aria-expanded="false">Privacy details</button>
-      <span data-more hidden><br>Pose tracking runs in your browser. Kinetix only sends your rep results (counts, form checks, cues) and check-ins to your care team — never camera frames.</span></span></div>
+      <span data-more hidden><br>Pose tracking runs in your browser. Kinetix only sends your rep results (counts, form checks, cues) and check-ins to your care team. Never camera frames.</span></span></div>
     <label class="check-row"><input type="checkbox" data-remember> Remember my choice (change any time in Settings)</label>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button type="button" class="btn btn-primary md" style="flex:1 1 200px" data-camera>Turn on camera</button>

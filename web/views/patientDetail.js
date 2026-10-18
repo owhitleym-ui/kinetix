@@ -68,9 +68,9 @@ export async function patientDetailRoute({ user, params }) {
     ${painFlag ? `<div class="alert-banner" role="alert">${ICON.warn}<div class="txt"><b>Pain is above your limit.</b> Reported ${painFlag.pain}/10 in the last 2 sessions (was ${painFlag.was})${painfulEx ? `, mostly during ${esc(exName(painfulEx).toLowerCase())}` : ""}.</div><button type="button" class="link-btn" data-message>Message patient</button></div>` : ""}
     <div class="bento">
       <section class="card b-pain" aria-labelledby="painH">
-        <div class="row-between" style="align-items:flex-start"><div><h2 id="painH">Reported pain</h2><div class="muted" style="font-size:.875rem">0–10 after each session</div></div>
+        <div class="row-between" style="align-items:flex-start"><div><h2 id="painH">Reported pain</h2><div class="muted" style="font-size:.875rem">0-10 after each session</div></div>
           ${painFlag ? `<div style="text-align:right"><div style="font-size:2.125rem;font-weight:800;line-height:1;color:#c2410c">${painFlag.pain}<span style="font-size:1rem;color:var(--muted)">/10</span></div><div style="font-size:.8125rem;font-weight:700;color:#c2410c">↑ from ${painFlag.was}</div></div>`
-            : `<div style="text-align:right;font-size:2.125rem;font-weight:800;line-height:1">${sessions[sessions.length - 1]?.checkin?.pain ?? "–"}<span style="font-size:1rem;color:var(--muted)">/10</span></div>`}</div>
+            : `<div style="text-align:right;font-size:2.125rem;font-weight:800;line-height:1">${sessions[sessions.length - 1]?.checkin?.pain ?? "-"}<span style="font-size:1rem;color:var(--muted)">/10</span></div>`}</div>
         ${painChart(sessions, A)}
       </section>
       <section class="card b-form" aria-labelledby="formH"><h2 id="formH">Form accuracy</h2>${formChart(sessions, plan?.items || [])}</section>
@@ -87,7 +87,7 @@ export async function patientDetailRoute({ user, params }) {
       </section>
       <section class="card b-recent" aria-labelledby="recH">
         <div class="row-between"><h2 id="recH" style="font-size:1rem">Recent sessions</h2></div>
-        <div>${recent.map((s) => { const pain = s.checkin?.pain; return `<div class="recent-row"><span style="color:var(--muted);font-weight:600">${new Date(s.startedAt).toLocaleDateString(undefined, { weekday: "short" })}</span><span class="n">${s.checkin?.note ? `“${esc(s.checkin.note)}”` : "No note"}</span><span style="font-weight:600">${pctOf(s)}%</span><span class="tag ${pain >= A ? "alert" : ""}" style="font-size:.75rem;justify-content:center">Pain ${pain ?? "–"}</span></div>`; }).join("") || '<p class="muted">No shared sessions yet.</p>'}</div>
+        <div>${recent.map((s) => { const pain = s.checkin?.pain; return `<div class="recent-row"><span style="color:var(--muted);font-weight:600">${new Date(s.startedAt).toLocaleDateString(undefined, { weekday: "short" })}</span><span class="n">${s.checkin?.note ? `“${esc(s.checkin.note)}”` : "No note"}</span><span style="font-weight:600">${pctOf(s)}%</span><span class="tag ${pain >= A ? "alert" : ""}" style="font-size:.75rem;justify-content:center">Pain ${pain ?? "-"}</span></div>`; }).join("") || '<p class="muted">No shared sessions yet.</p>'}</div>
       </section>
       <section class="card b-err" aria-labelledby="errH">
         <div><h2 id="errH">Common form errors</h2><div class="muted" style="font-size:.8125rem">Last 3 sessions</div></div>

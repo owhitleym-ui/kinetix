@@ -51,7 +51,7 @@ export async function aiPlanRoute({ user, params }) {
             <div class="rings4">
               <div>${ring({ size: 104, value: sl.sessions / Math.max(1, sl.expected), label: `${sl.sessions}/${sl.expected}`, aria: `${sl.sessions} of ${sl.expected} sessions done` })}<b>Sessions</b><small>sessions done</small></div>
               <div>${ring({ size: 104, value: sl.goodPct / 100, color: "var(--indigo)", label: `${sl.goodPct}%`, aria: `${sl.goodPct}% good form` })}<b>Good form</b><small>of reps</small></div>
-              <div>${ring({ size: 104, value: (sl.pain ?? 0) / 10, color: "var(--alert)", label: `<span style="color:var(--alert-ink);font-size:1.375rem">${sl.pain ?? "–"}</span>`, aria: `Pain ${sl.pain} out of 10` })}<b>Pain</b><small>${sl.painFrom != null && sl.pain > sl.painFrom ? `up from ${sl.painFrom} · ` : ""}out of 10</small></div>
+              <div>${ring({ size: 104, value: (sl.pain ?? 0) / 10, color: "var(--alert)", label: `<span style="color:var(--alert-ink);font-size:1.375rem">${sl.pain ?? "-"}</span>`, aria: `Pain ${sl.pain} out of 10` })}<b>Pain</b><small>${sl.painFrom != null && sl.pain > sl.painFrom ? `up from ${sl.painFrom} · ` : ""}out of 10</small></div>
               <div><div class="ring" style="width:104px;height:104px" role="img" aria-label="Effort: ${eff.word}"><svg viewBox="0 0 100 100" width="104" height="104"><circle cx="50" cy="50" r="44" fill="none" stroke="var(--accent)" stroke-width="10"/></svg><div class="ring-label">${face({ mouth: eff.mouth }, 34, "#1e4fa8")}</div></div><b>Effort</b><small>“${eff.word}”</small></div>
             </div></section>
           <section class="card bordered stack" style="padding:20px;gap:10px">

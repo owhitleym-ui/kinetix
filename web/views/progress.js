@@ -30,9 +30,9 @@ export async function progressRoute({ user }) {
   }
 
   const goodNow = in10(pr.goodNow), goodThen = in10(pr.goodThen);
-  const goodLine = pr.count < 4 ? "Keep going — your trend shows up after a few sessions."
+  const goodLine = pr.count < 4 ? "Keep going. Your trend shows up after a few sessions."
     : goodNow > goodThen ? `Up from ${goodThen} in 10 when you started.`
-    : goodNow < goodThen ? `It was ${goodThen} in 10 at the start. Slow, steady reps help.` : "Same as when you started — nice and steady.";
+    : goodNow < goodThen ? `It was ${goodThen} in 10 at the start. Slow, steady reps help.` : "Same as when you started. Nice and steady.";
   const pf = pr.painNow == null ? null : painFace(pr.painNow);
   const painLine = pr.painNow == null ? "Rate your pain after a session to see it here."
     : pr.painNow >= pr.alertAt ? `That’s high. Let ${esc(ptName)} know before your next session.`

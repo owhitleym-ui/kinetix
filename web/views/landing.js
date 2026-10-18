@@ -53,9 +53,9 @@ function landingHTML() {
       <p class="muted" style="margin:0;font-size:.875rem">Patients join with the invite code from their physical therapist.</p>
     </div>
     <div class="l-mock" aria-hidden="true" data-reveal="right" style="--d:.15s">
-      <div class="l-cam">${skeleton}<div class="l-cue"><span class="dot" style="width:12px;height:12px;background:var(--primary)"></span>Good height — lower slowly</div></div>
+      <div class="l-cam">${skeleton}<div class="l-cue"><span class="dot" style="width:12px;height:12px;background:var(--primary)"></span>Good height. Lower slowly</div></div>
       <div class="l-rep">${ring({ size: 110, value: 0.6, stroke: 12, label: '<span style="font-size:2.25rem">6</span>', sub: "of 10" })}<span>Reps this set</span></div>
-      <div class="l-note"><span class="avatar sm blue">ML</span><div><b>From your PT</b><br>“Nice steady squats — I’ve added 2 reps.”</div></div>
+      <div class="l-note"><span class="avatar sm blue">ML</span><div><b>From your PT</b><br>“Nice steady squats. I’ve added 2 reps.”</div></div>
     </div>
   </section>
   <section id="how" class="l-band-white"><div class="l-section">
@@ -193,14 +193,14 @@ export function signinRoute({ query }) {
     try {
       if (!(await atpReachable())) {
         if (mode === "register") { err("Creating an account needs the Kinetix account service, which isn’t running here. Use the demo account instead."); btn.disabled = false; return; }
-        toast("Account service is offline — signed in to the demo account.");
+        toast("Account service is offline. Signed in to the demo account.");
         finish(signInDemo(role, users()), { demo: true });
         return;
       }
       const user = mode === "register"
         ? await registerAtp({ email, password, displayName: String(fd.get("name")).trim(), role: role === "pt" ? "pt" : "patient" })
         : await signInAtp(email, password);
-      if (user.role !== role) toast(`This is a ${user.role === "pt" ? "provider" : "patient"} account — opening the ${user.role === "pt" ? "provider" : "patient"} view.`, 4000);
+      if (user.role !== role) toast(`This is a ${user.role === "pt" ? "provider" : "patient"} account. Opening the ${user.role === "pt" ? "provider" : "patient"} view.`, 4000);
       finish(user);
     } catch (ex) {
       err(ex.message || "Sign in failed"); btn.disabled = false;

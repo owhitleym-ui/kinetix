@@ -9,7 +9,7 @@ const TTS_BASE = (typeof window !== "undefined" && window.FORM_CHECK_TTS)
 /** OpenAI female-presenting voice */
 const FEMALE_VOICE = "nova";
 
-/** Playback loudness multiplier (1 = normal; 2–2.5 feels much clearer on laptop speakers). */
+/** Playback loudness multiplier (1 = normal; 2-2.5 feels much clearer on laptop speakers). */
 const PLAYBACK_GAIN = 2.35;
 
 const CACHE_MAX = 80;

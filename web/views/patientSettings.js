@@ -104,7 +104,7 @@ export function patientSettingsRoute({ user }) {
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "kinetix-my-data.json" });
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
-    root.querySelector("[data-delrec]").onclick = () => toast("No recordings are stored by Kinetix — video stays on your device.", 4000);
+    root.querySelector("[data-delrec]").onclick = () => toast("No recordings are stored by Kinetix. Video stays on your device.", 4000);
     root.querySelector("[data-msg]").onclick = () => {
       if (pt?.id) go(`#/patient/messages?with=${encodeURIComponent(pt.id)}`);
       else go("#/patient/messages");

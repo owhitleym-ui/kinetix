@@ -172,7 +172,7 @@ async function loadModel(ex) {
       `On people it never saw, facing the camera: catches ${Math.round(m.mistakes_caught * 100)}% of mistakes, names the mistake ` +
       `right ${Math.round(m.mistakes_named_right * 100)}% of the time, leaves ${Math.round(m.good_left_alone * 100)}% of good reps alone.`;
   $("#angleLabel").textContent = model.segmenter.mode === "tempo" ? "Next cue" : ANGLES[ex][ANGLES[ex].length - 1][0];
-  $("#angle").textContent = "–";
+  $("#angle").textContent = "-";
   shownAngle = {}; smoothAngle = {};
   currentEx = ex;
   const f = findExercise(ex);
@@ -233,10 +233,10 @@ function flushSpeakLatest() {
 const GOOD_EXTRAS = [
   "Keep it up!",
   "Nice work!",
-  "That's the one — keep going!",
+  "That's the one. Keep going!",
   "Looking strong!",
-  "Great form — stay with it!",
-  "You've got this — keep it up!",
+  "Great form. Stay with it!",
+  "You've got this. Keep it up!",
 ];
 let goodExtraIdx = 0;
 function nextGoodExtra() {
@@ -250,15 +250,15 @@ const COACH_SAY = {
   ERR_KNEES_INSIDE: "You might want to push your knees out a bit more on the next rep, so they track over your toes.",
   ERR_KNEES_FORWARD: "Try sitting back into your hips a little more next time, so your knees stay behind your toes.",
   ERR_LIFTED_HEELS: "See if you can keep your heels planted on the floor for the next rep.",
-  ERR_SHALLOW_SQUAT: "You might want to go a little deeper next rep — sit back until your thighs are near parallel.",
-  ERR_TORSO_TO_SIDE: "Try to keep your torso centered next time — avoid leaning to one side.",
+  ERR_SHALLOW_SQUAT: "You might want to go a little deeper next rep. Sit back until your thighs are near parallel.",
+  ERR_TORSO_TO_SIDE: "Try to keep your torso centered next time. Avoid leaning to one side.",
   ERR_ARM_FORWARD: "On the next rep, raise your arm out to the side in line with your body, not out in front.",
   ERR_BENT_ARM: "You might want to keep your elbow a bit straighter on the next rep.",
-  ERR_ELEVATED_SHOULDER: "Try keeping that shoulder down next time — no shrug.",
+  ERR_ELEVATED_SHOULDER: "Try keeping that shoulder down next time. No shrug.",
   ERR_HEAD_TO_SIDE: "See if you can keep your head straight on the next rep, without tilting.",
   ERR_LOW_ABDUCTION: "You might want to lift your arm a little higher next time, at least to shoulder level.",
   ERR_ARM_TO_SIDE: "On the next rep, move your arm straight back, close to your body.",
-  ERR_TORSO_FORWARD: "Try keeping your torso upright next time — avoid bending forward.",
+  ERR_TORSO_FORWARD: "Try keeping your torso upright next time. Avoid bending forward.",
   ERR_TORSO_ROTATION: "See if you can keep your chest facing forward on the next rep, without twisting.",
 };
 
@@ -324,7 +324,7 @@ function showChip(text, kind, ms = 3000) {   // fades in, holds, fades out; no f
 let lastSetupSpoken = "", lastSetupAt = 0;
 function showSetup(g) {
   // Speak actionable setup cues only (framing / paused). Never speak "Hold still"
-  // (UI still shows it). Don't stopSpeak on Hold still — gate flicker was cutting
+  // (UI still shows it). Don't stopSpeak on Hold still. gate flicker was cutting
   // Go / framing lines off entirely. Skip during welcome.
   if (performance.now() >= welcomeQuietUntil && g.title !== lastSetupSpoken) {
     if (g.title !== "Hold still") {
@@ -379,7 +379,7 @@ function onPose(res, t) {
   if (model.segmenter.mode === "tempo") {
     if (seg.takeCue()) { speak(model.segmenter.cue, { interrupt: true }); showChip(model.segmenter.cue, "info", 1200); }
     $("#state").textContent = seg.inRep ? "move now" : "get ready";
-    $("#angle").textContent = seg.value === null ? "–" : `${seg.value.toFixed(0)} s`;
+    $("#angle").textContent = seg.value === null ? "-" : `${seg.value.toFixed(0)} s`;
   } else {
     $("#state").textContent = seg.inRep ? "in rep" : "at rest";
   }
@@ -391,7 +391,7 @@ function onMovement(frames) {
   const v = validateRep(frames, seg, rules());
   if (!v.ok) {
     showChip(`Not counted · ${v.short}`, "muted", 3500);
-    logRow("skip", "–", "Not counted", v.short, "");
+    logRow("skip", "-", "Not counted", v.short, "");
     sessionMemory.pushSkip({ reason: v.reason, short: v.short });
     recordRep("skip");
     speakLatest(`Not counted. ${v.reason}`);
@@ -442,7 +442,7 @@ function onMovement(frames) {
     .map(([c, p]) => ({ label: c, title: nice(c), p: Math.round(p * 100) / 100 })) : [];
   const bars = ruleRows ? ruleRows.map((r) => {
     const f = (x) => (r.unit === "°" ? `${Math.round(x)}°` : x.toFixed(2));
-    const target = r.lo != null && r.hi != null ? `${f(r.lo)}–${f(r.hi)}` : r.lo != null ? `≥ ${f(r.lo)}` : `≤ ${f(r.hi)}`;
+    const target = r.lo != null && r.hi != null ? `${f(r.lo)}-${f(r.hi)}` : r.lo != null ? `≥ ${f(r.lo)}` : `≤ ${f(r.hi)}`;
     return `<div class="check ${r.ok ? "ok" : "no"}"><span>${r.ok ? "✓" : "✗"}</span><span>${esc(r.label)}</span><span>${f(r.value)}</span><span>target ${target}</span></div>`;
   }).join("") : Object.entries(out.probs).sort((a, b) => b[1] - a[1]).map(([c, p], i) =>
     `<div class="bar${i === 0 ? " top" : ""}"><span>${esc(nice(c))}</span><span><i style="width:${(p * 100).toFixed(0)}%"></i></span><span>${(p * 100).toFixed(0)}%</span></div>`).join("");
@@ -662,7 +662,7 @@ function localSessionSummary(ctx) {
   if (topMistakes.length) {
     spoken += ` The main things to practice next time: ${topMistakes.join(", ")}.`;
   } else {
-    spoken += " Great consistency — keep that form going next session.";
+    spoken += " Great consistency. Keep that form going next session.";
   }
   return spoken.trim();
 }
@@ -742,9 +742,9 @@ function stopMic() {
 
 function micErrorMessage(err) {
   if (err === "aborted") return null;
-  if (err === "no-speech") return "Didn't catch that — click the mic and speak clearly.";
+  if (err === "no-speech") return "Didn't catch that. Click the mic and speak clearly.";
   if (err === "not-allowed" || err === "service-not-allowed" || err === "no-media-devices") {
-    return "Mic blocked — click the lock/tune icon in the address bar and allow Microphone for this site.";
+    return "Mic blocked. Click the lock/tune icon in the address bar and allow Microphone for this site.";
   }
   if (err === "audio-capture") return "No microphone found. Check your input device in Windows settings.";
   if (err === "network") {
@@ -833,7 +833,7 @@ ttsHealth().then((h) => {
   const el = $("#ttsStatus");
   if (!el) return;
   if (h?.keyConfigured) el.textContent = "Natural voice ready";
-  else if (h) el.textContent = "TTS proxy up — add OPENAI_API_KEY";
+  else if (h) el.textContent = "TTS proxy up. Add OPENAI_API_KEY";
   else el.textContent = "Natural voice offline (browser voice fallback)";
 });
 

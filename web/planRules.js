@@ -159,7 +159,7 @@ export function draftMessage({ suggestions, sinceLast, A }) {
   const parts = [sinceLast.sessions >= sinceLast.expected * 0.8 ? "Great consistency this week!" : "Thanks for keeping up with your exercises."];
   for (const s of suggestions) {
     const name = exName(s.ex).toLowerCase();
-    if (s.kind === "keep") parts.push(`Your ${name} form looks solid — ${s.to.cue.charAt(0).toLowerCase()}${s.to.cue.slice(1)} as you go.`);
+    if (s.kind === "keep") parts.push(`Your ${name} form looks solid. ${s.to.cue.charAt(0).toUpperCase()}${s.to.cue.slice(1)} as you go.`);
     else if (s.kind === "add") parts.push(`I’ve added ${name} to warm your shoulder up first.`);
     else if (s.progress) parts.push(`You’re ready for a little more on ${name}.`);
     else parts.push(`Let’s slow down ${name} and do fewer reps while it’s sore.`);

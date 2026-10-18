@@ -8,7 +8,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Ask for mic permission explicitly — SpeechRecognition alone often never prompts. */
+/** Ask for mic permission explicitly. SpeechRecognition alone often never prompts. */
 export async function ensureMicPermission() {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error("no-media-devices");
@@ -24,7 +24,7 @@ export async function ensureMicPermission() {
  * Start recognition after mic permission is granted.
  * Returns { stop() }.
  *
- * Uses continuous mode until the first final phrase — one-shot mode often
+ * Uses continuous mode until the first final phrase. One-shot mode often
  * ends before the user finishes speaking, especially right after TTS.
  */
 export function listen({ onResult, onError, onEnd, onInterim, lang = "en-US" } = {}) {

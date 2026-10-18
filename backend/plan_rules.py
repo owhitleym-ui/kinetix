@@ -164,7 +164,7 @@ def draft_message(
         if s.get("kind") == "keep":
             cue = (s.get("to") or {}).get("cue") or ""
             parts.append(
-                f"Your {name} form looks solid — {cue[:1].lower()}{cue[1:]} as you go."
+                f"Your {name} form looks solid. {cue[:1].upper()}{cue[1:]} as you go."
                 if cue
                 else f"Your {name} form looks solid."
             )

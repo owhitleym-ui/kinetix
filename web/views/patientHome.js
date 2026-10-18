@@ -17,7 +17,7 @@ export async function patientHomeRoute({ user }) {
   const good = h.goodThisWeek, prev = h.goodLastWeek;
   const in10 = good == null ? null : Math.round(good * 10), prev10 = prev == null ? null : Math.round(prev * 10);
   const trend = in10 == null ? "Finish a session to see how your reps look." :
-    prev10 == null ? "" : in10 > prev10 ? `That’s up from ${prev10} last week.` : in10 < prev10 ? `Last week it was ${prev10}. You’ve got this.` : "Same as last week — nice and steady.";
+    prev10 == null ? "" : in10 > prev10 ? `That’s up from ${prev10} last week.` : in10 < prev10 ? `Last week it was ${prev10}. You’ve got this.` : "Same as last week. Nice and steady.";
 
   const root = renderPage(`
     <div class="greet"><span class="sun-badge ${g.cls}">${g.icon}</span><div><div class="greet-date">${esc(longDate())}</div><h1>${g.word}, ${esc(user.first || "")}</h1></div></div>
