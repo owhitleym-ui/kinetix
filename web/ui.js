@@ -37,7 +37,7 @@ export function ring({ size = 104, value = 0, color = "var(--primary)", track = 
   const r = 50 - stroke / 2 - 1, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, value));
   const role = aria ? `role="img" aria-label="${esc(aria)}"` : 'aria-hidden="true"';
   return `<div class="ring" style="width:${size}px;height:${size}px" ${role}><svg viewBox="0 0 100 100" width="${size}" height="${size}"><circle cx="50" cy="50" r="${r}" fill="none" stroke="${track}" stroke-width="${stroke}"/>` +
-    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${(c * v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/></svg>` +
+    `<circle class="ring-fill" cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${(c * v).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/></svg>` +
     (label || sub ? `<div class="ring-label">${label ? `<b>${label}</b>` : ""}${sub ? `<small>${sub}</small>` : ""}</div>` : "") + "</div>";
 }
 
