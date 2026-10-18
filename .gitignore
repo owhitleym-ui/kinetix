@@ -56,3 +56,7 @@ voice-feedback/.env
 voice-feedback/out/
 voice-feedback/server/node_modules/
 
+
+.env.production
+backend/.env.production
+

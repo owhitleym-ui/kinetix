@@ -1,5 +1,6 @@
-# Redeploy on OCI VM: sync env secrets, pull main, restart API/TTS/nginx.
-# Secrets: OCI_HOST, OCI_USER, OCI_SSH_KEY, BACKEND_ENV, VOICE_FEEDBACK_ENV
+# Redeploy on OCI VM: sync env + OCI API key, pull main, restart API/TTS/nginx.
+# Secrets: OCI_HOST, OCI_USER, OCI_SSH_KEY, BACKEND_ENV, VOICE_FEEDBACK_ENV,
+#          OCI_CONFIG (optional), OCI_API_KEY_PEM (optional)
 name: Deploy to OCI
 
 on:
@@ -39,6 +40,8 @@ jobs:
           OCI_USER: ${{ secrets.OCI_USER }}
           BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
           VOICE_FEEDBACK_ENV: ${{ secrets.VOICE_FEEDBACK_ENV }}
+          OCI_CONFIG: ${{ secrets.OCI_CONFIG }}
+          OCI_API_KEY_PEM: ${{ secrets.OCI_API_KEY_PEM }}
         run: |
           set -euo pipefail
           SSH=(ssh -i ~/.ssh/oci_deploy -o ConnectTimeout=20 "$OCI_USER@$OCI_HOST")
@@ -49,14 +52,22 @@ jobs:
             printf '%s\n' "$BACKEND_ENV" | "${SSH[@]}" 'cat > ~/kinetix/backend/.env && chmod 600 ~/kinetix/backend/.env'
             echo "Wrote backend/.env"
           else
-            echo "BACKEND_ENV secret empty — leaving existing backend/.env"
+            echo "BACKEND_ENV secret empty - leaving existing backend/.env"
           fi
 
           if [ -n "${VOICE_FEEDBACK_ENV:-}" ]; then
             printf '%s\n' "$VOICE_FEEDBACK_ENV" | "${SSH[@]}" 'mkdir -p ~/kinetix/voice-feedback && cat > ~/kinetix/voice-feedback/.env && chmod 600 ~/kinetix/voice-feedback/.env'
             echo "Wrote voice-feedback/.env"
           else
-            echo "VOICE_FEEDBACK_ENV secret empty — leaving existing voice-feedback/.env"
+            echo "VOICE_FEEDBACK_ENV secret empty - leaving existing voice-feedback/.env"
+          fi
+
+          if [ -n "${OCI_CONFIG:-}" ] && [ -n "${OCI_API_KEY_PEM:-}" ]; then
+            printf '%s\n' "$OCI_CONFIG" | "${SSH[@]}" 'mkdir -p ~/.oci && cat > ~/.oci/config && chmod 600 ~/.oci/config'
+            printf '%s\n' "$OCI_API_KEY_PEM" | "${SSH[@]}" 'mkdir -p ~/.oci && cat > ~/.oci/oci_api_key.pem && chmod 600 ~/.oci/oci_api_key.pem'
+            echo "Wrote ~/.oci/config + oci_api_key.pem"
+          else
+            echo "OCI_CONFIG / OCI_API_KEY_PEM not both set - skipping ~/.oci sync"
           fi
 
           "${SSH[@]}" 'cd ~/kinetix && bash deploy.sh'
@@ -65,3 +76,8 @@ jobs:
         run: |
           sleep 3
           curl -fsS https://207-211-163-177.sslip.io/health
+          echo
+          curl -fsS -X POST https://207-211-163-177.sslip.io/coach/chat \
+            -H "Content-Type: application/json" \
+            -d '{"message":"how many left","history":[],"session_context":{"reps_done":3,"reps_target":10}}'
+          echo
