@@ -1,19 +1,26 @@
 """Kinetix coach API — bridges the browser to OCI Generative AI (with local fallbacks)."""
 from __future__ import annotations
 
+import json
 import os
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from oci_genai import generate_chat, generate_cue, generate_summary
 from oci_storage import list_sessions, write_session
 
 load_dotenv()
+
+# Node TTS on the same VM (nginx often sends /tts here under HTTPS)
+TTS_UPSTREAM = os.getenv("TTS_UPSTREAM", "http://127.0.0.1:3002").rstrip("/")
 
 CORS_ORIGINS = [
     o.strip()
@@ -82,6 +89,41 @@ class SessionPayload(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"service": "kinetix-coach", "status": "ok"}
+
+
+@app.get("/tts/health")
+def tts_health() -> dict[str, Any]:
+    """Proxy TTS health so Vercel can check voice via the public API host."""
+    try:
+        with urllib.request.urlopen(f"{TTS_UPSTREAM}/health", timeout=5) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"tts_unreachable: {exc}") from exc
+
+
+@app.post("/tts")
+async def tts_proxy(request: Request) -> Response:
+    """Forward neural TTS to voice-feedback on :3002 (fixes Vercel → OCI HTTPS /tts)."""
+    body = await request.body()
+    req = urllib.request.Request(
+        f"{TTS_UPSTREAM}/tts",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            audio = resp.read()
+            return Response(
+                content=audio,
+                media_type=resp.headers.get("Content-Type", "audio/mpeg"),
+                headers={"Cache-Control": "no-store"},
+            )
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise HTTPException(status_code=exc.code, detail=detail or "tts_upstream_error") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"tts_unreachable: {exc}") from exc
 
 
 @app.post("/coach/cue")

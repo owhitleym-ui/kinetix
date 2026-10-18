@@ -129,13 +129,19 @@ export function speakNatural(text, { voice = FEMALE_VOICE, interrupt = false } =
 }
 
 export async function ttsHealth() {
-  try {
-    const r = await fetch(`${TTS_BASE}/health`);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch {
-    return null;
+  // Local TTS (:3002) exposes /health; OCI/Vercel uses FastAPI /tts/health proxy.
+  const paths = String(TTS_BASE).includes(":3002")
+    ? ["/health"]
+    : ["/tts/health", "/health"];
+  for (const path of paths) {
+    try {
+      const r = await fetch(`${TTS_BASE}${path}`);
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (data?.service === "voice-feedback-tts" || data?.keyConfigured != null) return data;
+    } catch { /* try next */ }
   }
+  return null;
 }
 
 export { TTS_BASE, FEMALE_VOICE, PLAYBACK_GAIN };
