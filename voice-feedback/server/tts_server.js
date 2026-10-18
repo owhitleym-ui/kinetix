@@ -29,8 +29,15 @@ const origins = (process.env.CORS_ORIGINS || "http://127.0.0.1:8801,http://local
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+const vercelOrigin = /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i;
 
-app.use(cors({ origin: (o, cb) => cb(null, !o || origins.includes(o) || origins.includes("null")) }));
+function allowOrigin(origin) {
+  if (!origin || origins.includes(origin) || origins.includes("null")) return true;
+  if (vercelOrigin.test(origin)) return true;
+  return false;
+}
+
+app.use(cors({ origin: (o, cb) => cb(null, allowOrigin(o)) }));
 app.use(express.json({ limit: "32kb" }));
 
 app.get("/health", (_req, res) => {

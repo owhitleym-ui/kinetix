@@ -19,10 +19,15 @@ CORS_ORIGINS = [
     o.strip()
     for o in os.getenv(
         "CORS_ORIGINS",
-        "http://127.0.0.1:8801,http://localhost:8801",
+        "http://127.0.0.1:8801,http://localhost:8801,https://kinetix-six-drab.vercel.app",
     ).split(",")
     if o.strip()
 ]
+# Vercel preview + production (*.vercel.app). Add custom domains via CORS_ORIGINS.
+CORS_ORIGIN_REGEX = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://([a-z0-9-]+\.)*vercel\.app",
+)
 
 app = FastAPI(
     title="Kinetix Coach API",
@@ -32,6 +37,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

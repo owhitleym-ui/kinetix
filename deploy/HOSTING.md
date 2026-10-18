@@ -1,90 +1,82 @@
-# Host Form Check on one OCI VM (Option 1)
+# Hosting: Vercel frontend + Oracle backend (hackathon default)
 
-Frontend (`web/`) + coach API (`backend/`) + TTS (`voice-feedback/`) behind **nginx** on the same Compute instance.
+Static UI on **Vercel**. Coach API, GenAI, Object Storage, and TTS on **OCI Compute**.
 
-## 1. One-time on the VM
+```
+Browser (Vercel)  →  https://YOUR-VM.sslip.io/coach/*   →  FastAPI :8000
+                  →  https://YOUR-VM.sslip.io/tts       →  TTS :3002
+                  →  OCI GenAI / Object Storage / ATP (from the VM)
+```
+
+## 1. OCI backend (one-time on the VM)
 
 ```bash
 ssh opc@YOUR_PUBLIC_IP
 
-# packages (Oracle Linux)
-sudo dnf install -y git nginx python3.12 python3.12-pip
-# Node 20+ for TTS (optional but recommended)
+sudo dnf install -y git nginx python3.12 python3.12-pip certbot python3-certbot-nginx
 curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
 sudo dnf install -y nodejs
 
-# clone
 git clone https://github.com/owhitleym-ui/kinetix.git ~/kinetix
-cd ~/kinetix
+# or: cd ~/kinetix && git pull
 ```
 
-Create secrets on the server (do not commit):
+Secrets (do not commit):
 
 ```bash
-# Coach / GenAI / Object Storage
-nano ~/kinetix/backend/.env
-
-# TTS
-nano ~/kinetix/voice-feedback/.env   # OPENAI_API_KEY=...
-
-# OCI SDK auth for GenAI
-mkdir -p ~/.oci
-# put config + oci_api_key.pem here
+nano ~/kinetix/backend/.env          # GenAI + Object Storage + CORS
+nano ~/kinetix/voice-feedback/.env   # OPENAI_API_KEY
+mkdir -p ~/.oci                      # config + oci_api_key.pem
 ```
 
-Open firewall / security list: **ingress TCP 80** (and 443 later), **22**.
-
-```bash
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --reload   # if firewalld is on
-```
-
-## 2. Deploy
+Open **TCP 80 + 443** in the VCN security list and (if used) firewalld.
 
 ```bash
 bash ~/kinetix/deploy.sh
-```
-
-That script:
-
-1. Resets to `origin/main`
-2. Starts uvicorn on `127.0.0.1:8000`
-3. Starts TTS on `127.0.0.1:3002` if `.env` exists
-4. Installs `deploy/nginx-formcheck.conf` → `/etc/nginx/conf.d/formcheck.conf`
-5. Serves `~/kinetix/web` on port **80**
-
-## 3. Open the app
-
-```
-http://YOUR_PUBLIC_IP/
-```
-
-or
-
-```
-http://207-211-163-177.sslip.io/
-```
-
-(if that IP is still this VM)
-
-`web/config.js` uses **same origin** off localhost, so the browser calls:
-
-- `POST /coach/chat`, `/coach/summary`
-- `POST /tts`
-- `GET /health`
-
-## 4. HTTPS (recommended for mic/camera)
-
-```bash
-sudo dnf install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d 207-211-163-177.sslip.io
 ```
 
-Camera/mic often require a secure context (HTTPS) except on `localhost`.
+**HTTPS is required** once the UI is on Vercel (browsers block HTTPS page → HTTP API).
 
-## 5. GitHub auto-deploy
+Check:
 
-Repo secrets: `OCI_HOST`, `OCI_USER`, `OCI_SSH_KEY`.  
-Push to `main` under `backend/**` runs `deploy.sh` via SSH.
+```bash
+curl -fsS https://207-211-163-177.sslip.io/health
+```
 
-After frontend-only changes, either widen the workflow `paths` to include `web/**` and `deploy/**`, or SSH and run `bash ~/kinetix/deploy.sh` manually.
+## 2. Point the frontend at OCI
+
+`web/config.js` already sends Vercel traffic to:
+
+```js
+const OCI_BACKEND = "https://207-211-163-177.sslip.io";
+```
+
+Change that constant if your public hostname differs.
+
+CORS: FastAPI and TTS allow `*.vercel.app` by default. Add a custom domain to `CORS_ORIGINS` in `backend/.env` if needed, then re-run `deploy.sh`.
+
+## 3. Deploy frontend to Vercel
+
+1. [vercel.com](https://vercel.com) → Import the `kinetix` GitHub repo  
+2. Framework: **Other** — `vercel.json` sets `outputDirectory` to `web`  
+3. Deploy  
+
+Open the `*.vercel.app` URL, Start session, confirm coach/TTS hit OCI (`/health` in Network tab).
+
+Or CLI:
+
+```bash
+npx vercel --prod
+```
+
+## 4. Demo story
+
+> Frontend on Vercel; form coach, Generative AI, and session storage on Oracle Cloud.
+
+---
+
+## Alternative: everything on one OCI VM
+
+See older Option 1 flow: `deploy.sh` + nginx serves `web/` on port 80 as well.  
+`config.js` uses `location.origin` when not on localhost/Vercel.
