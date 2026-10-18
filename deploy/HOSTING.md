@@ -74,6 +74,20 @@ npx vercel --prod
 
 > Frontend on Vercel; form coach, Generative AI, and session storage on Oracle Cloud.
 
+## 5. GitHub auto-deploy (env secrets → VM)
+
+Repo **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|--------|--------|
+| `OCI_HOST` | VM public IP |
+| `OCI_USER` | `opc` |
+| `OCI_SSH_KEY` | SSH private key |
+| `BACKEND_ENV` | full contents of `backend/.env` |
+| `VOICE_FEEDBACK_ENV` | full contents of `voice-feedback/.env` |
+
+On push to `main` (or **Actions → Deploy to OCI → Run workflow**), the job pulls code, writes those `.env` files on the VM, then runs `deploy.sh`.
+
 ---
 
 ## Alternative: everything on one OCI VM

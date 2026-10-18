@@ -1,6 +1,5 @@
-# Redeploy Form Check on the OCI VM (API + TTS + nginx static web) when relevant paths change.
-# Needs repo secrets: OCI_HOST, OCI_USER, OCI_SSH_KEY (private key whose public half is in the
-# server's ~/.ssh/authorized_keys). Runs deploy.sh on the server.
+# Redeploy on OCI VM: sync env secrets, pull main, restart API/TTS/nginx.
+# Secrets: OCI_HOST, OCI_USER, OCI_SSH_KEY, BACKEND_ENV, VOICE_FEEDBACK_ENV
 name: Deploy to OCI
 
 on:
@@ -34,14 +33,33 @@ jobs:
           chmod 600 ~/.ssh/oci_deploy
           ssh-keyscan -H "$OCI_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Run deploy.sh on the server
+      - name: Pull, sync envs, deploy
         env:
           OCI_HOST: ${{ secrets.OCI_HOST }}
           OCI_USER: ${{ secrets.OCI_USER }}
-          REMOTE: cd ~/kinetix && git fetch origin main && git reset --hard origin/main && bash deploy.sh
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+          VOICE_FEEDBACK_ENV: ${{ secrets.VOICE_FEEDBACK_ENV }}
         run: |
-          ssh -n -i ~/.ssh/oci_deploy -o ConnectTimeout=20 \
-            "$OCI_USER@$OCI_HOST" "$REMOTE"
+          set -euo pipefail
+          SSH=(ssh -i ~/.ssh/oci_deploy -o ConnectTimeout=20 "$OCI_USER@$OCI_HOST")
+
+          "${SSH[@]}" 'cd ~/kinetix && git fetch origin main && git reset --hard origin/main'
+
+          if [ -n "${BACKEND_ENV:-}" ]; then
+            printf '%s\n' "$BACKEND_ENV" | "${SSH[@]}" 'cat > ~/kinetix/backend/.env && chmod 600 ~/kinetix/backend/.env'
+            echo "Wrote backend/.env"
+          else
+            echo "BACKEND_ENV secret empty — leaving existing backend/.env"
+          fi
+
+          if [ -n "${VOICE_FEEDBACK_ENV:-}" ]; then
+            printf '%s\n' "$VOICE_FEEDBACK_ENV" | "${SSH[@]}" 'mkdir -p ~/kinetix/voice-feedback && cat > ~/kinetix/voice-feedback/.env && chmod 600 ~/kinetix/voice-feedback/.env'
+            echo "Wrote voice-feedback/.env"
+          else
+            echo "VOICE_FEEDBACK_ENV secret empty — leaving existing voice-feedback/.env"
+          fi
+
+          "${SSH[@]}" 'cd ~/kinetix && bash deploy.sh'
 
       - name: Check the public API
         run: |
