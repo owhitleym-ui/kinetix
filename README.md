@@ -5,17 +5,23 @@ PT sees progress and approves AI-drafted plan changes. Point a webcam at yoursel
 counts your reps, spots common mistakes, and tells you how to fix them, on screen and out loud, after every rep.
 Pose tracking runs in the browser tab: the video never leaves your computer.
 
+**Live demo:** [https://kinetix-six-drab.vercel.app/](https://kinetix-six-drab.vercel.app/)
+(static UI on Vercel; optional coach/TTS hit a hosted Oracle backend — see `deploy/HOSTING.md`)
+
 ## The app
 
 | Screen | Route | Who |
 |---|---|---|
 | Landing page, sign-in pop-up | `#/`, `#/signin` | everyone |
 | Today (plan, PT feedback, your week) | `#/patient` | patient |
+| My progress | `#/patient/progress` | patient |
+| Messages (patient ↔ PT) | `#/patient/messages`, `#/provider/messages` | patient / PT |
 | Warm-up → recording choice → live form check | `#/patient/warmup` → `#/patient/record` → `#/patient/session` | patient |
 | Session summary + check-in (pain, effort, note) | `#/patient/summary` | patient |
 | Settings (video & privacy, reminders, text size, spoken cues, care team + session sharing, account) | `#/patient/settings` | patient |
 | Exercise library (single exercise, no plan) | `#/library`, `#/library/<region>/<exercise>` | patient (read-only for PTs) |
 | Caseload: needs attention + all patients | `#/provider` | PT |
+| Plan drafts list | `#/provider/drafts` | PT |
 | Patient progress (pain, form, deficits, adherence, sessions, errors) | `#/provider/patient/<id>` | PT |
 | AI plan review: accept / edit / dismiss, approve & send | `#/provider/plan/<draftId>` | PT |
 | Provider settings (AI assistant + pain limit, alerts, defaults) | `#/provider/settings` | PT |
@@ -27,16 +33,16 @@ above the PT's limit (Provider settings, default 4/10).
 
 ### Demo mode
 
-Everything works with only `npm run serve`: no database, no OCI, no TTS server. Sign in from the pop-up with
-**Continue with demo patient account** (Sam Rivera, rotator cuff repair, week 3, pain rising) or **Continue with demo
-provider account** (Dr. Maya Lee, DPT, a caseload of 8). The seed (`web/demo/seed.js`) is fictional, uses only the 8
-exercises that have a model, and its dates are relative to today. Demo data lives in your browser's `localStorage`;
-**Reset demo data** is at the bottom of both settings screens. Live sessions in demo mode are saved to the same store,
-so the summary, caseload and patient progress screens show what you just did.
+Everything works with only `npm run serve` (or the live Vercel URL): no database, no OCI, no TTS server. Sign in from
+the pop-up with **Continue with demo patient account** (Sam Rivera, rotator cuff repair, week 3, pain rising) or
+**Continue with demo provider account** (Dr. Maya Lee, DPT, a caseload of 8). The seed (`web/demo/seed.js`) is
+fictional, uses only the 8 exercises that have a model, and its dates are relative to today. Demo data lives in your
+browser's `localStorage`; **Reset demo data** is at the bottom of both settings screens. Live sessions in demo mode
+are saved to the same store, so the summary, caseload and patient progress screens show what you just did.
 
 With the ATP API running (see `api/README.md`) and a real account, sign-in uses it, and sessions and reps are logged
-there as before. The newer endpoints the screens read (plans, check-ins, caseload, drafts, settings) are not in
-`api/` yet; until they are, those reads fall back to the demo data. The AI plan rules try FastAPI
+there as before. The newer endpoints the screens read (plans, check-ins, caseload, drafts, settings, messages) are
+not in `api/` yet; until they are, those reads fall back to the demo data. The AI plan rules try FastAPI
 `POST /coach/plan-suggestions` first and run the same rules in the browser when it isn't there.
 
 ## Features
@@ -66,6 +72,9 @@ there as before. The newer endpoints the screens read (plans, check-ins, caseloa
 - **Only real reps count**: a movement must be complete and deliberate (full range, back to start, steady, in frame).
   Anything else is logged as "Not counted" with the reason.
 - **Feedback on every rep**: verdict, how to fix it, spoken cue, joint-angle overlay, rep counter and a rep log.
+- **Spoken cues + Ask coach**: neural TTS via the voice-feedback proxy (local `:3002`) or the hosted OCI backend
+  (Vercel already points there). Mid-set you can type or speak to the coach (mic / **Voice command**), and GenAI
+  replies when the FastAPI coach is running.
 - **Mobility limits: None / Slight / Moderate**: relaxes what counts as a good rep for people who can't do the full
   movement. Slight: about 15% less range needed to count; Moderate: about 25% less. Range-of-motion feedback gets
   gentler and needs more evidence; real form problems are still flagged. Good reps called good: 70-75% (None),
@@ -82,15 +91,20 @@ Open <http://127.0.0.1:8801> in Chrome, Edge or Safari, choose **I'm a patient**
 with the demo account. As a patient, press **Start today's session**: warm-up, then the recording choice, then the
 camera. **Practise something else** opens the exercise library.
 
+Or skip local setup and open the live demo: [https://kinetix-six-drab.vercel.app/](https://kinetix-six-drab.vercel.app/)
+
 Optional services (each one is used when it's running and skipped when it isn't):
 
 ```bash
-npm run serve:api    # FastAPI coach on :8000 (OCI GenAI, local fallbacks)
+npm run serve:api    # FastAPI coach on :8000 (OCI GenAI, local fallbacks; see backend/.env.example)
 npm run serve:atp    # ATP accounts/sessions API on :3001 (needs an Oracle wallet, see api/README.md)
+# Neural TTS proxy on :3002 (OpenAI key in voice-feedback/.env):
+cd voice-feedback/server && npm install && npm start
 ```
 
 No build step or install is needed for the app. Camera access works on `localhost`. MediaPipe loads from the
-jsDelivr CDN, so the first load needs internet.
+jsDelivr CDN, so the first load needs internet. Hosting (Vercel UI + OCI backend) is documented in
+`deploy/HOSTING.md`.
 
 ## How it works
 
@@ -140,23 +154,33 @@ camera / video → MediaPipe Pose → setup gate → rep detection (shoulder ele
 ## Project layout
 
 ```
-web/                    the app (static files, served as-is)
+web/                    the app (static files, served as-is; also what Vercel deploys)
   index.html            app shell: routed views, warm-up, exercise library, live form check
   kinetix.css           "Fresh Mint" design tokens + components (Plus Jakarta Sans)
+  config.js             API/TTS base URLs (localhost vs Vercel → OCI)
   router.js             hash router with patient / PT role guards
-  views/                one module per screen (landing + sign-in, patient home, summary, settings, caseload,
-                        patient progress, AI plan review, provider settings, recording choice)
+  views/                one module per screen (landing + sign-in, Today, progress, messages, summary,
+                        settings, caseload, drafts, patient detail, AI plan review, recording choice)
   data.js               data layer: demo store (localStorage) or the ATP API
   demo/seed.js          fictional demo patients, PT, plans and sessions (dates relative to today)
   planRules.js          AI plan rules + caseload flags (pain, missed days, slipping form)
   planRun.js            the session in progress (plan exercises, sets, counted reps)
   catalog.js            exercise library: regions, exercises, what each targets, icons
-  app.js                camera loop, drawing, feedback, voice, rep log, full screen, plan sessions
+  app.js                camera loop, drawing, feedback, voice, coach UI, rep log, full screen, plan sessions
+  coach.js              FastAPI client: cue / chat / summary
+  naturalSpeak.js       neural TTS client (FORM_CHECK_TTS → local :3002 or hosted OCI)
+  speechInput.js        mic / speech recognition for Ask coach and voice commands
   features.js           joint-angle features, rep detection, calibration, classifier (shared with the tests)
   rules.js              ROM angle checks: image-plane angles, rep values, clinical limits, verdict
   session.js            setup gate, rep validation rules, mobility setting
+  auth.js, atpClient.js JWT login + session/rep logging to the ATP API
+  login.html, register.html, permissions.html   standalone auth / share pages
   models/               pose_landmarker_full.task (MediaPipe), rehab26_<exercise>.json (trained weights),
                         rules_<exercise>.json (clinical thresholds + false-alarm measurements)
+backend/                FastAPI coach API (:8000) — GenAI cues/chat/summary/plan-suggestions + session logs
+api/                    Express ATP API (:3001) — accounts, sessions, reps, sharing (Oracle Autonomous DB)
+voice-feedback/         optional OpenAI TTS proxy (:3002); see voice-feedback/README.md
+deploy/                 hosting notes (Vercel + OCI); nginx sample
 training/
   train_rehab26.py      train + evaluate (leave-one-person-out) + export models to web/models/
   rehab_features.py     Python copy of the feature code in web/features.js
@@ -164,9 +188,8 @@ training/
   report.json           metrics from the last training run
   clinical_rules.py     ROM exercises: clinical thresholds, false-alarm check on MobiPhysio, exports rules_*.json
   angle_rules.py        Python copy of web/rules.js
-  extract_pose.py       runs MediaPipe Pose over downloaded videos (REHAB24-6, MobiPhysio)
+  extract_pose.py       runs MediaPipe Pose over downloaded videos (MobiPhysio)
   rules_report.json     false-alarm measurements from the last clinical_rules.py run
-  label_server.py, label/, rehab24_mistakes.json   in progress: tool to hand-label REHAB24-6 mistakes
 dataset/
   rehab26_features.npz  compact ready-to-train dataset (every labeled rep as model features + labels, 48 MB)
 tests/
@@ -176,9 +199,9 @@ tests/
   rules_test.mjs        ROM checks: browser == Python values; setup + live replay of expert-approved videos
   tune.mjs, offsets.mjs rep-detection tuning tools
   browser_test.py, load_check.py, fs_check.py   headless-Chrome checks of the real page
+scripts/serve-web.mjs   static file server used by npm run serve
 scripts/get_data.sh     downloads the full skeleton data into data/ (not committed, ~690 MB)
 scripts/get_mobiphysio.py   downloads the MobiPhysio videos used for the ROM checks (~20 GB, not committed)
-scripts/get_rehab24.py      downloads REHAB24-6 videos for three planned exercises (~1.3 GB, not committed)
 ```
 
 ## Retrain the models
