@@ -17,6 +17,7 @@ screenshots/
 .env.local
 *.log
 backend/data/
+.vercel/
 
 # Python
 .venv/
@@ -27,3 +28,18 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Node ATP API secrets (never commit wallets / keys)
+api/.env
+api/Wallet_*/
+api/**/Wallet_*/
+api/*.pem
+api/oci_api_key.pem
+api/node_modules/
+branch/api/.env
+branch/api/Wallet_*/
+branch/api/**/Wallet_*/
+branch/api/*.pem
+branch/api/oci_api_key.pem
+branch/api/node_modules/
+

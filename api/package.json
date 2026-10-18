@@ -1,0 +1,18 @@
+{
+  "name": "form-check-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "oci-sdk": "^2.92.0",
+    "oracledb": "^6.7.0",
+    "uuid": "^10.0.0"
+  }
+}

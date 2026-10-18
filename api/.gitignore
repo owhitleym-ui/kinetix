@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.local
+Wallet_*/
+**/Wallet_*/
+*.pem
+!*.pem.example
+oci_api_key.pem
+*.log
