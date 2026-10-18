@@ -39,7 +39,7 @@ export function patientSettingsRoute({ user }) {
           </div>
           <div class="setting-row" style="border-top:1px solid var(--track);padding-top:14px"><div><b>Ask me before each session</b><small>Show the video choice every time you start.</small></div>${sw("askEachSession", st.askEachSession !== false, "Ask me before each session")}</div>
           <div style="display:flex;flex-wrap:wrap;gap:10px"><button type="button" class="btn btn-secondary" data-download>Download my data</button><button type="button" class="btn btn-danger-line" data-delrec>Delete my recordings</button></div>
-          <div class="note blue">${ICON.shield}<span>All your health data, including any video, is encrypted and handled in accordance with HIPAA.</span></div>
+          <div class="note blue">${ICON.shield}<span>Your camera video never leaves this device. Only rep results and check-ins are shared with your care team.</span></div>
         </section>
         <section id="reminders" tabindex="-1" class="card" aria-labelledby="remH">
           <h2 id="remH" class="card-title">Reminders</h2>

@@ -47,7 +47,7 @@ export function providerSettingsRoute({ user }) {
           <div class="setting-row"><b>Two-step sign-in</b>${sw("twoStep", st.twoStep, "Two-step sign-in")}</div>
           <div class="setting-row"><b>Auto sign-out</b><span class="tag" style="font-size:.875rem;padding:8px 14px">After ${st.autoSignout} min</span></div>
           <button type="button" class="link-btn" style="align-self:flex-start" data-soon="The access log">View access log</button>
-          <div class="note blue" style="font-size:.8125rem;margin-top:auto">${ICON.shield}<span>Patient data is encrypted and handled in accordance with HIPAA.</span></div>
+          <div class="note blue" style="font-size:.8125rem;margin-top:auto">${ICON.shield}<span>Patients’ camera video stays on their device. You see rep results, form checks and check-ins.</span></div>
           ${user.mode === "demo" ? '<button type="button" class="btn btn-ghost" data-reset>Reset demo data</button>' : ""}
         </section>
       </div></div>`, { user, title: "Settings" });

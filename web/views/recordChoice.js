@@ -20,7 +20,7 @@ export function openRecordChoice({ ptName = "your PT", choice = "share", onCamer
       ${VIDEO_OPTIONS(esc(ptName)).map(([v, t, d]) => `<button type="button" class="radio-card" role="radio" aria-checked="${v === choice}" data-v="${v}"><span class="radio-dot"></span><span><b>${t}</b><span class="desc">${d}</span></span></button>`).join("")}
     </div>
     <p style="margin:0;font-size:.875rem;line-height:1.45;color:#4a524d">Either way, your rep counts, form scores and check-ins are shared with ${esc(ptName)}.</p>
-    <div class="note mint" style="color:#244232">${ICON.shield}<span><b>Your privacy is protected.</b> All your health data, including any video, is encrypted and handled in accordance with HIPAA.
+    <div class="note mint" style="color:#244232">${ICON.shield}<span><b>Your video never leaves this device.</b>
       <button type="button" class="link-btn" style="min-height:0" data-details aria-expanded="false">Privacy details</button>
       <span data-more hidden><br>Pose tracking runs in your browser. Kinetix only sends your rep results (counts, form checks, cues) and check-ins to your care team — never camera frames.</span></span></div>
     <label class="check-row"><input type="checkbox" data-remember> Remember my choice (change any time in Settings)</label>

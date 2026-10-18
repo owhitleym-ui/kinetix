@@ -82,7 +82,7 @@ function landingHTML() {
   </div></section>
   <section id="privacy" class="l-section stack" style="gap:32px">
     <div data-reveal style="display:flex;flex-wrap:wrap;align-items:center;gap:20px"><span class="sun-badge" style="width:64px;height:64px;background:var(--accent-soft);color:var(--accent-strong)">${ICON.shield}</span>
-      <div style="flex:1 1 400px"><h2 class="l-h2" style="font-size:clamp(1.75rem,3.2vw,2.375rem)">Private by design</h2><p class="muted" style="margin:6px 0 0;font-size:1.0625rem">All health data is encrypted and handled in accordance with HIPAA.</p></div></div>
+      <div style="flex:1 1 400px"><h2 class="l-h2" style="font-size:clamp(1.75rem,3.2vw,2.375rem)">Private by design</h2><p class="muted" style="margin:6px 0 0;font-size:1.0625rem">Pose tracking runs right in your browser. Your camera video never leaves your device.</p></div></div>
     <div class="l-privacy-cards">${PRIVACY.map(([t, d], i) => `<div class="card" data-reveal style="--d:${0.12 * (i + 1)}s"><h3>${t}</h3><p>${d}</p></div>`).join("")}</div>
   </section>
   <section class="l-section" style="padding-top:0">
@@ -91,7 +91,7 @@ function landingHTML() {
   </section>
   </main>
   <footer class="l-footer"><div class="l-footer-in"><span class="brand" style="font-size:.9375rem">${logo(30)}Kinetix</span>
-    <nav aria-label="Footer"><a href="#privacy" data-anchor>Privacy</a><a href="#" data-soon="Terms">Terms</a><a href="#" data-soon="Contact">Contact</a></nav><span>© ${new Date().getFullYear()} Kinetix</span></div></footer>
+    <nav aria-label="Footer"><a href="#privacy" data-anchor>Privacy</a><a href="#" data-soon="Terms">Terms</a><a href="#" data-soon="Contact">Contact</a></nav></div></footer>
 </div>`;
 }
 
@@ -165,7 +165,7 @@ export function signinRoute({ query }) {
       <div class="row-between" style="font-size:.875rem;font-weight:700">
         ${reg ? '<button type="button" class="link-btn" data-mode="signin">I already have an account</button>' : '<button type="button" class="link-btn" data-forgot>Forgot password?</button><button type="button" class="link-btn" data-mode="register">Create account</button>'}
       </div>
-      <div class="note blue">${ICON.lock}<span>Your health information is private and handled in accordance with HIPAA.</span></div>
+      <div class="note blue">${ICON.lock}<span>Your camera video stays on your device. Only rep results are shared with your care team.</span></div>
     </form>`;
     const form = wrap.querySelector("form");
     form.querySelectorAll("[data-role]").forEach((b) => b.addEventListener("click", () => { role = b.dataset.role; keep(); }));
