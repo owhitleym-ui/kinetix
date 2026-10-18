@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from oci_genai import generate_chat, generate_cue, generate_summary
+from oci_storage import list_sessions, write_session
 
 load_dotenv()
 
@@ -63,6 +65,14 @@ class SummaryRequest(BaseModel):
     session_context: dict[str, Any] = Field(default_factory=dict)
 
 
+class SessionPayload(BaseModel):
+    patient_id: str
+    timestamp: Optional[str] = None
+    exercise: str = ""
+    reps: list[dict[str, Any]] = Field(default_factory=list)
+    model_config = {"extra": "allow"}  # keep whatever session context the browser sends
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"service": "form-check-coach", "status": "ok"}
@@ -85,6 +95,25 @@ def coach_chat(body: ChatRequest) -> dict[str, str]:
 def coach_summary(body: SummaryRequest) -> dict[str, Any]:
     result, source = generate_summary(body.session_context)
     return {**result, "source": source}
+
+
+@app.post("/sessions")
+def create_session(payload: SessionPayload) -> dict[str, Any]:
+    """Save a session log (rep results / keypoints only, never video) to OCI Object Storage."""
+    data = payload.model_dump()
+    data["timestamp"] = data.get("timestamp") or datetime.now(timezone.utc).isoformat()
+    try:
+        return {"ok": True, **write_session(data)}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/sessions")
+def get_sessions(patient_id: Optional[str] = Query(default=None)) -> dict[str, Any]:
+    try:
+        return {"sessions": list_sessions(patient_id)}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 if __name__ == "__main__":

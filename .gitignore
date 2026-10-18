@@ -12,6 +12,12 @@ web/testvideos/
 # Screenshots from the browser tests
 screenshots/
 
+# Secrets and server logs (backend/.env holds OCI settings)
+.env
+.env.local
+*.log
+backend/data/
+
 # Python
 .venv/
 __pycache__/
