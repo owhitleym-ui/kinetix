@@ -49,7 +49,7 @@ function landingHTML() {
       <span class="l-pill">Physical therapy, between visits</span>
       <h1>Your PT’s plan, coached at home.</h1>
       <p class="l-lede">Kinetix watches your form through your camera, gives you live cues on every rep, and shares your progress with your physical therapist, so your plan keeps up with you.</p>
-      <div class="l-cta"><a class="btn btn-primary lg" href="#/signin?role=patient">I’m a patient${ICON.arrow}</a><a class="btn btn-secondary lg" href="#/signin?role=provider">I’m a provider</a></div>
+      <div class="l-cta"><a class="btn btn-primary lg" href="#/signin?role=patient">I’m a patient</a><a class="btn btn-secondary lg" href="#/signin?role=provider">I’m a provider</a></div>
       <p class="muted" style="margin:0;font-size:.875rem">Patients join with the invite code from their physical therapist.</p>
     </div>
     <div class="l-mock" aria-hidden="true" data-reveal="right" style="--d:.15s">
