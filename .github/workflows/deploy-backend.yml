@@ -31,15 +31,14 @@ jobs:
           chmod 600 ~/.ssh/oci_deploy
           ssh-keyscan -H "$OCI_HOST" >v/null
 
-      - name: Run deploy.sh on the ser
+      - name: Run deploy.sh on the server
         env:
-          OCI_HOST: ${{ secrets.OCI_HO
+          OCI_HOST: ${{ secrets.OCI_HOST }}
           OCI_USER: ${{ secrets.OCI_USER }}
+          REMOTE: cd ~/kinetix && git fetch origin main && git reset --hard origin/main && bash deploy.sh
         run: |
-          ssh -n -i ~/.ssh/oci_deploy -o ConnectTimeout=20 "$OCI_USER@$OCI_HOST" 'cd ~/kinetix && git
-fetch origin main && git reset --hard .sh'
-
-      - name: Check the public API
+          ssh -n -i ~/.ssh/oci_deploy -o ConnectTimeout=20 \
+            "$OCI_USER@$OCI_HOST" "$REMOTE"
         run: |
           sleep 3
           curl -fsS https://207-211-163-177.sslip.io/health
