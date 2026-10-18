@@ -5,7 +5,7 @@
 import { api, getToken } from "./auth.js";
 import { atpReachable, currentUser } from "./account.js";
 import { buildSeed, defaultPatientSettings, defaultPtSettings } from "./demo/seed.js";
-import { alertAt, patientFlags, patientStatus, planSuggestions, recentMistakes, runRules, sessionGood } from "./planRules.js";
+import { alertAt, patientFlags, patientStatus, planSuggestions, recentMistakes, runRules, sessionGood, summarizeProgress } from "./planRules.js";
 import { exName } from "./exerciseText.js";
 
 const KEY = "kinetix.demo.v1";
@@ -127,6 +127,16 @@ export async function getPatientHome(pid) {
   const thisWeek = inRange(+today - 6 * DAY, Date.now() + 1), lastWeek = inRange(+today - 13 * DAY, +today - 6 * DAY);
   const ratio = (ss) => { const g = ss.reduce((t, s) => t + s.exercises.reduce((a, e) => a + e.good, 0), 0), n = ss.reduce((t, s) => t + s.exercises.reduce((a, e) => a + e.done, 0), 0); return n ? g / n : null; };
   return { plan, pt, profile, week, sessionsThisWeek: thisWeek.length, goal: 5, goodThisWeek: ratio(thisWeek), goodLastWeek: ratio(lastWeek), alertAt: alertAt(ptSettings) };
+}
+
+// ---------- progress ----------
+/** "My progress". ATP accounts send their own sessions (GET /api/me/sessions?detail=1, same shape as demo sessions);
+ *  until that endpoint exists they fall back to the demo store like every other screen. */
+export async function getProgress(pid) {
+  const res = await viaAtp("/api/me/sessions?detail=1", {}, () => null);
+  const sessions = Array.isArray(res?.sessions) ? res.sessions : sessionsFor(pid);
+  const pt = ptFor(pid);
+  return { ...summarizeProgress(sessions), pt, goal: 5, alertAt: alertAt(pt ? getSettings(pt.id) : defaultPtSettings()) };
 }
 
 // ---------- settings ----------

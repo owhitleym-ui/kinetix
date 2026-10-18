@@ -10,6 +10,7 @@ import { caseloadRoute, draftsRoute } from "./caseload.js";
 import { patientDetailRoute } from "./patientDetail.js";
 import { aiPlanRoute } from "./aiPlan.js";
 import { providerSettingsRoute } from "./providerSettings.js";
+import { progressRoute } from "./progress.js";
 import { stubPage } from "./chrome.js";
 
 /** Patients get their own text size everywhere; everyone else sees the default. */
@@ -22,7 +23,7 @@ const stub = (what, active) => page(({ user }) => stubPage(what, { active, user 
 route("/", page(landingRoute));
 route("/signin", page(signinRoute));
 route("/patient", page(patientHomeRoute), { role: "patient" });
-route("/patient/progress", stub("My progress", "progress"), { role: "patient" });
+route("/patient/progress", page(progressRoute), { role: "patient" });
 route("/patient/messages", stub("Messages", "messages"), { role: "patient" });
 route("/patient/summary", page(summaryRoute), { role: "patient" });
 route("/patient/settings", page(patientSettingsRoute), { role: "patient" });

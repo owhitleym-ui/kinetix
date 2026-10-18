@@ -25,6 +25,25 @@ export function recentMistakes(sessions, n = RECENT) {
   return Object.values(out).sort((a, b) => b.n - a.n);
 }
 
+/** Patient-facing progress from finished sessions. Same input shape for demo and ATP sessions:
+ *  { startedAt, exercises: [{ ex, done, good, mistakes: [{ code, n }] }], checkin?: { pain } }. */
+export function summarizeProgress(sessions, now = Date.now()) {
+  const list = [...sessions].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  const perSession = list.map((s) => ({ at: s.startedAt, good: sessionGood(s), pain: s.checkin?.pain ?? null, reps: sum(s.exercises, (e) => e.done) }));
+  const pains = perSession.filter((p) => p.pain != null);
+  const exercises = [...new Set(list.flatMap((s) => s.exercises.map((e) => e.ex)))].map((ex) => {
+    const vals = list.map((s) => exGood(s, ex)).filter((v) => v != null);
+    return { ex, sessions: vals.length, then: avg(vals.slice(0, 3)), now: avg(vals.slice(-3)) };
+  });
+  return {
+    count: list.length, since: list[0]?.startedAt || null, totalReps: sum(perSession, (p) => p.reps),
+    thisWeek: list.filter((s) => daysSince(s.startedAt, now) < 7).length, perSession, exercises,
+    goodThen: avg(perSession.slice(0, 3).map((p) => p.good)), goodNow: avg(perSession.slice(-3).map((p) => p.good)),
+    painThen: pains[0]?.pain ?? null, painNow: pains[pains.length - 1]?.pain ?? null,
+    focus: recentMistakes(list).slice(0, 3),
+  };
+}
+
 /** Why a PT should look at this patient today (or null). */
 export function patientFlags(sessions, settings, now = Date.now()) {
   const flags = [];

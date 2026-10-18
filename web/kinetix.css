@@ -322,6 +322,35 @@ button.avatar { cursor: pointer; }
 .stat3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .stat3 .card { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 20px; }
 .stat3 .stat-h { font-size: .9375rem; font-weight: 800; color: #4a524d; }
+/* P6 · My progress */
+.pr-title { margin: 0; font-size: 2.125rem; font-weight: 800; line-height: 1.15; }
+.pr-sub { margin: 4px 0 0; font-size: 1rem; }
+.pr-face svg { display: block; }
+.pr-grid { display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch; }
+.pr-chart-card { flex: 999 1 560px; display: flex; flex-direction: column; gap: 14px; }
+.pr-focus-card { flex: 1 1 320px; display: flex; flex-direction: column; gap: 14px; }
+.pr-plot { position: relative; flex: 1; min-height: 200px; display: flex; padding-left: 64px; }
+.pr-grid-lines { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.pr-grid-lines span { border-top: 1px dashed var(--line-2); font-size: .75rem; font-weight: 600; color: var(--faint); line-height: 0; padding-top: 0; height: 0; }
+.pr-grid-lines span:last-child { border-top: 1.5px solid var(--line-2); }
+.pr-bars { position: relative; flex: 1; display: flex; align-items: flex-end; gap: 8px; }
+.pr-bars > span { flex: 1; max-width: 64px; height: var(--h); border-radius: 8px 8px 3px 3px; background: #9fd9b0; transform-origin: bottom; animation: pr-grow .7s cubic-bezier(.3, .8, .3, 1) both; animation-delay: calc(var(--i) * 45ms); transition: background-color .2s; }
+.pr-bars > span.last, .pr-bars > span:hover { background: var(--primary); }
+@keyframes pr-grow { from { transform: scaleY(0); } }
+.pr-axis { display: flex; justify-content: space-between; font-size: .8125rem; font-weight: 600; color: var(--muted); margin-top: -2px; padding-left: 64px; }
+.pr-ic { width: 52px; height: 52px; border-radius: 16px; background: var(--primary-soft); color: var(--primary-strong); display: grid; place-items: center; flex: none; }
+.pr-ic svg { height: 38px; width: auto; }
+.pr-focus { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+.pr-focus li { display: flex; gap: 14px; align-items: flex-start; }
+.pr-focus b { display: block; font-size: 1rem; }
+.pr-focus small { display: block; color: var(--muted); font-size: .875rem; line-height: 1.4; }
+.pr-focus .pr-ex-name { margin-top: 4px; color: var(--accent-strong); font-weight: 600; }
+.pr-exlist { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 28px; }
+.pr-exlist li { display: flex; gap: 14px; align-items: center; padding: 10px 0; }
+.pr-ex-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pr-ex-main .row-between { align-items: center; }
+.pr-fill { background: var(--primary); border-radius: 99px; transform-origin: left; animation: pr-grow-x .9s cubic-bezier(.3, .8, .3, 1) both .2s; }
+@keyframes pr-grow-x { from { transform: scaleX(0); } }
 .form-circles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 10px 0; }
 .form-circles span { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); }
 .form-circles span.fix { background: var(--warn); }

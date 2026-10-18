@@ -52,6 +52,7 @@ and falls back to the browser demo store when an endpoint is missing (so they ar
 | Endpoint | Used by |
 |---|---|
 | `GET /api/me/plan` | Patient Today (active plan + PT message) |
+| `GET /api/me/sessions?detail=1` → `{ sessions: [{ startedAt, exercises: [{ ex, done, good, mistakes: [{ code, n }] }], checkin: { pain } }] }` | My progress (summarized client-side by `summarizeProgress` in `web/planRules.js`) |
 | `POST /api/checkins` `{ sessionId, pain, effort, note }` | Session summary |
 | `GET /api/caseload` (pt) | Provider caseload |
 | `GET/PUT /api/settings` | Patient and provider settings |
