@@ -1,0 +1,155 @@
+{
+ "type": "rules",
+ "exercise": "shoulder_internal_rotation",
+ "title": "Internal Rotation at 90\u00b0 Abduction",
+ "side": "right",
+ "segmenter": {
+  "mode": "auto",
+  "minFrames": 18,
+  "maxFrames": 300,
+  "pad": 6,
+  "calibFrames": 8,
+  "history": 150,
+  "start": 25,
+  "end": 12,
+  "rest": 8,
+  "restIs": "max",
+  "primary": "img:rotation"
+ },
+ "primary": "rotation",
+ "minAmp": 35,
+ "checks": [
+  {
+   "id": "rotation@peak",
+   "signal": "rotation",
+   "stat": "peak",
+   "kind": "rom",
+   "min": null,
+   "max": -50,
+   "code_low": null,
+   "code_high": "ERR_LOW_ROTATION",
+   "scale": 10,
+   "rest": 0,
+   "basis": "AAOS normal internal rotation 0-70 deg; 50+ allows for the ~10 deg uncertainty of estimating rotation from a front camera",
+   "label": "Rotation from neutral",
+   "unit": "\u00b0"
+  },
+  {
+   "id": "arm_raise@peak",
+   "signal": "arm_raise",
+   "stat": "peak",
+   "kind": "form",
+   "min": 70,
+   "max": 110,
+   "code_low": "ERR_ELBOW_DROP",
+   "code_high": "ERR_ELBOW_HIGH",
+   "scale": 10,
+   "rest": 0,
+   "basis": "upper arm at shoulder height (90 +- 20 deg of abduction), the 90/90 test position",
+   "label": "Shoulder elevation",
+   "unit": "\u00b0"
+  },
+  {
+   "id": "elbow@peak",
+   "signal": "elbow",
+   "stat": "peak",
+   "kind": "form",
+   "min": 60,
+   "max": 120,
+   "code_low": "ERR_ELBOW_ANGLE",
+   "code_high": "ERR_ELBOW_ANGLE",
+   "scale": 10,
+   "rest": 0,
+   "basis": "elbow held near a right angle (90 +- 30 deg) for 90/90 rotation",
+   "label": "Elbow angle",
+   "unit": "\u00b0"
+  },
+  {
+   "id": "trunk_lean@drift",
+   "signal": "trunk_lean",
+   "stat": "drift",
+   "kind": "comp",
+   "min": null,
+   "max": 10,
+   "code_low": null,
+   "code_high": "ERR_TRUNK_LEAN",
+   "scale": 10,
+   "rest": 0,
+   "basis": "trunk side lean under 10 deg (trunk lean is the usual compensation for limited shoulder range)",
+   "label": "Lateral trunk lean",
+   "unit": "\u00b0"
+  }
+ ],
+ "cues": {
+  "ERR_ELBOW_ANGLE": "Keep your elbow bent at a right angle.",
+  "ERR_ELBOW_DROP": "Keep your elbow up at shoulder height.",
+  "ERR_ELBOW_HIGH": "Keep your elbow level with your shoulder, not above it.",
+  "ERR_LOW_ROTATION": "Rotate your forearm further, as far as is comfortable.",
+  "ERR_TRUNK_LEAN": "Keep your trunk upright; don't lean to the side."
+ },
+ "short": {
+  "ERR_ELBOW_ANGLE": "Elbow at 90",
+  "ERR_ELBOW_DROP": "Elbow up",
+  "ERR_ELBOW_HIGH": "Elbow level",
+  "ERR_LOW_ROTATION": "Rotate further",
+  "ERR_TRUNK_LEAN": "Stay upright"
+ },
+ "names": {
+  "ERR_ELBOW_ANGLE": "Elbow not held at 90\u00b0",
+  "ERR_ELBOW_DROP": "Elbow below shoulder height",
+  "ERR_ELBOW_HIGH": "Elbow above shoulder height",
+  "ERR_LOW_ROTATION": "Limited rotation range",
+  "ERR_TRUNK_LEAN": "Lateral trunk lean"
+ },
+ "metrics": {
+  "good_videos": 9,
+  "poor_videos": 66,
+  "videos_without_reps": 33,
+  "people": 22,
+  "good_reps": 55,
+  "good_reps_pass": 0.818,
+  "good_reps_flagged_by_check": {
+   "rotation@peak": 0.018,
+   "arm_raise@peak": 0.091,
+   "elbow@peak": 0.109,
+   "trunk_lean@drift": 0.145
+  },
+  "poor_reps": 491,
+  "poor_reps_flagged": 0.358,
+  "flags_on_good": {
+   "ERR_ELBOW_ANGLE": 5,
+   "ERR_TRUNK_LEAN": 4,
+   "ERR_ELBOW_DROP": 1
+  },
+  "flags_on_poor": {
+   "ERR_ELBOW_ANGLE": 146,
+   "ERR_ELBOW_DROP": 21,
+   "ERR_TRUNK_LEAN": 5,
+   "ERR_LOW_ROTATION": 4
+  },
+  "reps_per_video": 8.0,
+  "measured_on_good": {
+   "rotation@peak": [
+    -90.0,
+    -90.0,
+    -90.0
+   ],
+   "arm_raise@peak": [
+    15.43,
+    90.01,
+    103.27
+   ],
+   "elbow@peak": [
+    88.84,
+    108.77,
+    171.51
+   ],
+   "trunk_lean@drift": [
+    0.31,
+    1.45,
+    18.34
+   ]
+  }
+ },
+ "source": "Clinical thresholds (AAOS / Norkin & White norms, common compensation limits); false alarms measured on MobiPhysio videos physiotherapists scored >= 90 (Iqbal et al., Harvard Dataverse 2025, CC0)"
+}

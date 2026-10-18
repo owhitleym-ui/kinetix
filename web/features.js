@@ -4,6 +4,8 @@
 // Input per frame: MediaPipe Pose *world* landmarks, 33 points [x, y, z] in meters, hip-centered,
 // y pointing down. Everything below is a ratio or an angle, so body size and camera distance cancel out.
 
+import { imgSignal } from "./rules.js";
+
 export const FEATURE_VERSION = 1;
 export const N_RESAMPLE = 16;
 
@@ -140,6 +142,7 @@ export function decide(model, out, { tauScale = 1, downweight = {} } = {}) {
 // Live rep detection on one "primary" signal: a rep starts when it moves away from the resting value
 // and ends when it comes back. Returns the rep's frames when a rep completes, else null.
 export function primarySignal(kind, P) {
+  if (kind.startsWith("img:")) return imgSignal(kind.slice(4), P);   // rule-check exercises: image-plane signals
   if (kind === "knees") return (angleAt(P[23], P[25], P[27]) + angleAt(P[24], P[26], P[28])) / 2;
   if (kind === "right_shoulder") return angleAt(P[24], P[12], P[14]);
   if (kind === "shoulder_height") {  // shoulders above ankles, % of leg length (drops as you squat)

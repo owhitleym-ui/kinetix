@@ -1,16 +1,31 @@
-# Form Check
+# Form Check (Kinetix exercise module)
 
-Live, on-device movement feedback for physical therapy exercises. Point a webcam at yourself (or load a video),
+Live, on-device movement feedback for physical therapy exercises, styled as the Exercises screen of the Kinetix app. Point a webcam at yourself (or load a video),
 and Form Check counts your reps, spots common mistakes, and tells you how to fix them, on screen and out loud,
 after every rep. Everything runs in the browser tab: the video never leaves your computer.
 
 ## Features
 
-- **Three exercises**: Bodyweight Squat, Shoulder Abduction (right arm), Shoulder Extension (right arm, guided pace).
-- **Mistake detection**: five physiotherapist-defined mistakes per exercise, detected automatically.
-  - Squat: knees caving in, knees past toes, heels lifting, not deep enough, leaning to one side
-  - Shoulder Abduction: arm drifting forward, shoulder shrugging, head tilting, arm not high enough, elbow bending
-  - Shoulder Extension: leaning forward, shoulder shrugging, torso twisting, elbow bending, arm drifting out
+- **Exercise library by body region**: "What would you like to work on?" → pick a region (Shoulder & Arm,
+  Spine & Core, Hip & Knee) → pick an exercise (each card says what it targets and why it's prescribed) → session.
+  Planned exercises are listed as "Coming soon".
+
+  | Region | Available | Coming soon |
+  |---|---|---|
+  | Shoulder & Arm | Shoulder Abduction, Shoulder Extension (paced), Shoulder Abduction AROM, Shoulder Horizontal Adduction, External Rotation at 90° Abduction, Internal Rotation at 90° Abduction, Shoulder Circumduction | Elbow Flexion, Overhead Elbow Extension, Wrist Extension AROM |
+  | Spine & Core | | Prone Press-Up, Standing Lateral Trunk Flexion, Standing Trunk Rotation, Pelvic Rotation |
+  | Hip & Knee | Bodyweight Squat | Standing Hip Abduction, Split Squat, Sit-to-Stand, Supine Hip and Knee Flexion |
+
+  Two ways of judging a rep (not shown in the UI): Bodyweight Squat, Shoulder Abduction and Shoulder Extension use a
+  trained classifier; the other five shoulder exercises use joint-angle checks against clinical thresholds.
+  Shoulder exercises use the right arm.
+- **Trained classifier**: five physiotherapist-defined mistakes per exercise, detected automatically.
+  - Squat: knee valgus, excessive forward knee travel, heel rise, insufficient depth, lateral trunk lean
+  - Shoulder Abduction: forward arm drift, scapular elevation, lateral head tilt, limited abduction range, elbow not fully extended
+  - Shoulder Extension: forward trunk lean, scapular elevation, trunk rotation, elbow not fully extended, arm drifting into abduction
+- **Joint-angle checks**: each rep's joint angles are compared with textbook range-of-motion norms and compensation
+  limits, and the most severe miss is named (for example "Limited circumduction range: shoulder elevation 142°,
+  target ≥ 150°"). The panel shows every measured angle against its target.
 - **Setup check**: counting starts only when your whole body is in frame, you face the camera, you're in the start
   position and holding still. Then it says "Go".
 - **Only real reps count**: a movement must be complete and deliberate (full range, back to start, steady, in frame).
@@ -25,10 +40,11 @@ after every rep. Everything runs in the browser tab: the video never leaves your
 ## Quick start
 
 ```bash
-npm run serve        # same as: python3 -m http.server 8801 --bind 127.0.0.1 --directory web
+npm run serve        # static server for web/ on port 8801
 ```
 
-Open <http://127.0.0.1:8801> in Chrome, Edge or Safari, choose an exercise and press **Start session**.
+Open <http://127.0.0.1:8801> in Chrome, Edge or Safari. After the warm-up (or **Skip warm-up**), choose a body area and an
+exercise, then press **Start session**.
 No build step or install is needed for the app. Camera access works on `localhost`. MediaPipe loads from the
 jsDelivr CDN, so the first load needs internet.
 
@@ -52,29 +68,65 @@ Models were trained on **REHAB26-ViewAngles**: 5 people, 1,665 physiotherapist-l
 3 phones. Training uses the MediaPipe skeletons that ship with the dataset, never images. It takes about 40 s on a
 laptop CPU; no GPU is needed.
 
+### ROM angle checks
+
+The range-of-motion exercises follow the rule-based approach of Adarsh & Francis (*AI Fitness Coach: Real-Time
+Exercise Posture Correction Using MediaPipe Pose Estimation and Voice Guidance*, NCECA 2026): measure joint angles,
+compare them with the range that defines correct form, and name the mistake when an angle leaves it.
+
+```
+camera / video → MediaPipe Pose → setup gate → rep detection (shoulder elevation, hand position or forearm rotation)
+  → rep validation → joint angles at the rep's turning point + largest trunk drift → each angle vs its clinical limit
+  → most severe miss named (or "Good form") → on-screen + spoken feedback
+```
+
+- **Thresholds come from clinical norms, not from data**: AAOS / Norkin & White range-of-motion norms (shoulder
+  abduction 0–180°, external rotation 0–90°, internal rotation 0–70°, horizontal adduction 0–135°) and common
+  compensation limits (lateral trunk lean under 10°). Each check stores its source (`basis`) in
+  `web/models/rules_<exercise>.json`.
+- **Measured in the image plane**: these movements cross the camera's view while the person faces it, and depth is
+  MediaPipe's weakest axis (a forearm pointing straight up reads ~50° off vertical in its 3D landmarks). Rotation is
+  estimated from how tall the forearm looks relative to the upper arm (forearm ≈ 0.78 × upper arm, Winter's
+  anthropometric tables). Trunk lean is measured along the non-working side, because the working shoulder rises with
+  the arm.
+- **Checked for false alarms** on MobiPhysio videos that three physiotherapists scored ≥ 90: how often a rep that
+  experts rated good trips a rule (see Results). The expert scores don't name mistakes, so which mistake is named
+  is not validated.
+
 ## Project layout
 
 ```
 web/                    the app (static files, served as-is)
-  index.html            layout and styles
+  index.html            layout and styles (Kinetix look: region → exercise → session)
+  catalog.js            exercise library: regions, exercises, what each targets, icons
   app.js                camera loop, drawing, feedback, voice, rep log, full screen
   features.js           joint-angle features, rep detection, calibration, classifier (shared with the tests)
+  rules.js              ROM angle checks: image-plane angles, rep values, clinical limits, verdict
   session.js            setup gate, rep validation rules, mobility setting
-  models/               pose_landmarker_full.task (MediaPipe) + rehab26_<exercise>.json (trained weights)
+  models/               pose_landmarker_full.task (MediaPipe), rehab26_<exercise>.json (trained weights),
+                        rules_<exercise>.json (clinical thresholds + false-alarm measurements)
 training/
   train_rehab26.py      train + evaluate (leave-one-person-out) + export models to web/models/
   rehab_features.py     Python copy of the feature code in web/features.js
   export_features.py    rebuilds dataset/rehab26_features.npz from the full data
   report.json           metrics from the last training run
+  clinical_rules.py     ROM exercises: clinical thresholds, false-alarm check on MobiPhysio, exports rules_*.json
+  angle_rules.py        Python copy of web/rules.js
+  extract_pose.py       runs MediaPipe Pose over downloaded videos (REHAB24-6, MobiPhysio)
+  rules_report.json     false-alarm measurements from the last clinical_rules.py run
+  label_server.py, label/, rehab24_mistakes.json   in progress: tool to hand-label REHAB24-6 mistakes
 dataset/
   rehab26_features.npz  compact ready-to-train dataset (every labeled rep as model features + labels, 48 MB)
 tests/
   parity_test.mjs       browser features == training features
   sim_test.mjs          replays held-out people frame by frame through the live pipeline
   mobility_test.mjs     None / Slight / Moderate mobility limits on the same replays
+  rules_test.mjs        ROM checks: browser == Python values; setup + live replay of expert-approved videos
   tune.mjs, offsets.mjs rep-detection tuning tools
   browser_test.py, load_check.py, fs_check.py   headless-Chrome checks of the real page
 scripts/get_data.sh     downloads the full skeleton data into data/ (not committed, ~690 MB)
+scripts/get_mobiphysio.py   downloads the MobiPhysio videos used for the ROM checks (~20 GB, not committed)
+scripts/get_rehab24.py      downloads REHAB24-6 videos for three planned exercises (~1.3 GB, not committed)
 ```
 
 ## Retrain the models
@@ -85,6 +137,14 @@ Works right after cloning, using the compact dataset in `dataset/` (no download,
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python training/train_rehab26.py       # writes web/models/*.json and training/report.json
+```
+
+ROM angle checks (thresholds are fixed; this re-measures false alarms and rewrites `web/models/rules_*.json`):
+
+```bash
+python scripts/get_mobiphysio.py               # ~20 GB of videos into data/mobiphysio
+python training/extract_pose.py mobiphysio E01 E02 E03 E04 E05   # MediaPipe skeletons (~1 h on a laptop)
+python training/clinical_rules.py              # also writes tests/data/rules_*.json for npm test
 ```
 
 To change the features themselves or run the replay tests, get the full skeleton data first. Training then uses it
@@ -117,6 +177,17 @@ People the model never saw, facing the camera, full live pipeline (`npm test`), 
 | Shoulder Abduction | 100% | 94% | 69% | 71% |
 | Shoulder Extension | 100% | 93% | 79% | 75% |
 
+Joint-angle checks: share of reps from MobiPhysio videos that three physiotherapists scored ≥ 90 that pass every
+check (`training/rules_report.json`). Which mistake gets named can't be validated: no dataset labels it.
+
+| Exercise | Videos scored ≥ 90 | People in the data | Reps checked | Pass every check |
+|---|---|---|---|---|
+| Shoulder Abduction AROM | 36 | 24 | 399 | 79% |
+| Shoulder Horizontal Adduction | 30 | 23 | 293 | 89% |
+| External Rotation at 90° Abduction | 12 | 23 | 101 | 96% |
+| Internal Rotation at 90° Abduction | 9 | 22 | 55 | 82% |
+| Shoulder Circumduction | 51 | 23 | 525 | 82% |
+
 ## Limitations
 
 - Trained on only 5 people; shoulder exercises are right arm only; designed for a front-facing camera.
@@ -125,6 +196,9 @@ People the model never saw, facing the camera, full live pipeline (`npm test`), 
 - The calibrated model compares you with yourself, so a mistake made on every single rep can start to look normal.
 - Small or depth-direction mistakes (torso leaning sideways, heels lifting, elbow bending) are the hardest to see
   from the front.
+- ROM angle checks: the thresholds are textbook norms, checked only for false alarms. No dataset labels which
+  mistake a range-of-motion rep has, so the named mistake isn't validated. Rotation is an estimate (about ±10°), and
+  trunk rotation isn't checked (from the front it can't be told apart from normal shoulder-blade motion).
 
 ## Privacy
 
@@ -145,5 +219,12 @@ because their training data is licensed CC BY-NC 4.0 (details below).
   trained models in `web/models/rehab26_*.json` and the derived dataset in `dataset/` are for non-commercial use.
   `dataset/rehab26_features.npz` is a modified version of that data (features computed from its skeletons), shared
   under the same license with attribution. The raw data is not included; `scripts/get_data.sh` downloads it.
+- **MobiPhysio** (false-alarm check for the ROM angle checks): Iqbal et al., Harvard Dataverse 2025,
+  [doi:10.7910/DVN/XSI0QN](https://doi.org/10.7910/DVN/XSI0QN), CC0 1.0. Videos are not included; only measured
+  statistics are.
+- **Rule-based approach**: Adarsh V K & Nimmy Francis, *AI Fitness Coach: Real-Time Exercise Posture Correction
+  Using MediaPipe Pose Estimation and Voice Guidance*, NCECA 2026, [doi:10.5281/zenodo.19597767](https://doi.org/10.5281/zenodo.19597767).
+- **Range-of-motion norms**: American Academy of Orthopaedic Surgeons; Norkin & White, *Measurement of Joint
+  Motion: A Guide to Goniometry*. Segment lengths: Winter, *Biomechanics and Motor Control of Human Movement*.
 - **MediaPipe Pose Landmarker** (Google, Apache 2.0): `web/models/pose_landmarker_full.task` and the
   `@mediapipe/tasks-vision` library loaded from jsDelivr.

@@ -1,0 +1,231 @@
+{
+  "shoulder_abduction_full": {
+    "good_videos": 36,
+    "poor_videos": 58,
+    "videos_without_reps": 9,
+    "people": 24,
+    "good_reps": 399,
+    "good_reps_pass": 0.794,
+    "good_reps_flagged_by_check": {
+      "arm_raise@peak": 0.065,
+      "elbow@peak": 0.073,
+      "trunk_lean@drift": 0.098
+    },
+    "poor_reps": 589,
+    "poor_reps_flagged": 0.115,
+    "flags_on_good": {
+      "ERR_TRUNK_LEAN": 39,
+      "ERR_LOW_RAISE": 23,
+      "ERR_BENT_ELBOW": 20
+    },
+    "flags_on_poor": {
+      "ERR_TRUNK_LEAN": 37,
+      "ERR_LOW_RAISE": 25,
+      "ERR_BENT_ELBOW": 6
+    },
+    "reps_per_video": 10.0,
+    "measured_on_good": {
+      "arm_raise@peak": [
+        137.97,
+        173.75,
+        179.72
+      ],
+      "elbow@peak": [
+        136.21,
+        167.86,
+        178.74
+      ],
+      "trunk_lean@drift": [
+        0.8,
+        2.73,
+        14.4
+      ]
+    }
+  },
+  "shoulder_adduction": {
+    "good_videos": 30,
+    "poor_videos": 57,
+    "videos_without_reps": 18,
+    "people": 23,
+    "good_reps": 293,
+    "good_reps_pass": 0.894,
+    "good_reps_flagged_by_check": {
+      "hand_across@peak": 0.078,
+      "elbow@peak": 0.01,
+      "trunk_lean@drift": 0.024
+    },
+    "poor_reps": 540,
+    "poor_reps_flagged": 0.341,
+    "flags_on_good": {
+      "ERR_NOT_ACROSS": 23,
+      "ERR_TRUNK_LEAN": 5,
+      "ERR_BENT_ELBOW": 3
+    },
+    "flags_on_poor": {
+      "ERR_NOT_ACROSS": 103,
+      "ERR_BENT_ELBOW": 41,
+      "ERR_TRUNK_LEAN": 40
+    },
+    "reps_per_video": 10.0,
+    "measured_on_good": {
+      "hand_across@peak": [
+        0.25,
+        0.61,
+        1.14
+      ],
+      "elbow@peak": [
+        144.69,
+        163.74,
+        176.78
+      ],
+      "trunk_lean@drift": [
+        0.64,
+        1.86,
+        4.9
+      ]
+    }
+  },
+  "shoulder_external_rotation": {
+    "good_videos": 12,
+    "poor_videos": 67,
+    "videos_without_reps": 29,
+    "people": 23,
+    "good_reps": 101,
+    "good_reps_pass": 0.96,
+    "good_reps_flagged_by_check": {
+      "rotation@peak": 0.04,
+      "arm_raise@peak": 0.01,
+      "elbow@peak": 0.03,
+      "trunk_lean@drift": 0.0
+    },
+    "poor_reps": 524,
+    "poor_reps_flagged": 0.256,
+    "flags_on_good": {
+      "ERR_LOW_ROTATION": 3,
+      "ERR_ELBOW_ANGLE": 1
+    },
+    "flags_on_poor": {
+      "ERR_ELBOW_ANGLE": 51,
+      "ERR_TRUNK_LEAN": 43,
+      "ERR_ELBOW_DROP": 31,
+      "ERR_LOW_ROTATION": 8,
+      "ERR_ELBOW_HIGH": 1
+    },
+    "reps_per_video": 9.0,
+    "measured_on_good": {
+      "rotation@peak": [
+        90.0,
+        90.0,
+        90.0
+      ],
+      "arm_raise@peak": [
+        81.64,
+        90.24,
+        98.27
+      ],
+      "elbow@peak": [
+        75.44,
+        97.99,
+        111.84
+      ],
+      "trunk_lean@drift": [
+        0.3,
+        0.75,
+        2.13
+      ]
+    }
+  },
+  "shoulder_internal_rotation": {
+    "good_videos": 9,
+    "poor_videos": 66,
+    "videos_without_reps": 33,
+    "people": 22,
+    "good_reps": 55,
+    "good_reps_pass": 0.818,
+    "good_reps_flagged_by_check": {
+      "rotation@peak": 0.018,
+      "arm_raise@peak": 0.091,
+      "elbow@peak": 0.109,
+      "trunk_lean@drift": 0.145
+    },
+    "poor_reps": 491,
+    "poor_reps_flagged": 0.358,
+    "flags_on_good": {
+      "ERR_ELBOW_ANGLE": 5,
+      "ERR_TRUNK_LEAN": 4,
+      "ERR_ELBOW_DROP": 1
+    },
+    "flags_on_poor": {
+      "ERR_ELBOW_ANGLE": 146,
+      "ERR_ELBOW_DROP": 21,
+      "ERR_TRUNK_LEAN": 5,
+      "ERR_LOW_ROTATION": 4
+    },
+    "reps_per_video": 8.0,
+    "measured_on_good": {
+      "rotation@peak": [
+        -90.0,
+        -90.0,
+        -90.0
+      ],
+      "arm_raise@peak": [
+        15.43,
+        90.01,
+        103.27
+      ],
+      "elbow@peak": [
+        88.84,
+        108.77,
+        171.51
+      ],
+      "trunk_lean@drift": [
+        0.31,
+        1.45,
+        18.34
+      ]
+    }
+  },
+  "arm_circles": {
+    "good_videos": 51,
+    "poor_videos": 36,
+    "videos_without_reps": 13,
+    "people": 23,
+    "good_reps": 525,
+    "good_reps_pass": 0.825,
+    "good_reps_flagged_by_check": {
+      "arm_raise@peak": 0.133,
+      "elbow@peak": 0.032,
+      "trunk_lean@drift": 0.048
+    },
+    "poor_reps": 364,
+    "poor_reps_flagged": 0.407,
+    "flags_on_good": {
+      "ERR_SMALL_CIRCLE": 60,
+      "ERR_TRUNK_LEAN": 20,
+      "ERR_BENT_ELBOW": 12
+    },
+    "flags_on_poor": {
+      "ERR_SMALL_CIRCLE": 126,
+      "ERR_BENT_ELBOW": 16,
+      "ERR_TRUNK_LEAN": 6
+    },
+    "reps_per_video": 10.0,
+    "measured_on_good": {
+      "arm_raise@peak": [
+        139.32,
+        169.83,
+        179.69
+      ],
+      "elbow@peak": [
+        156.6,
+        170.52,
+        178.79
+      ],
+      "trunk_lean@drift": [
+        1.54,
+        3.67,
+        9.51
+      ]
+    }
+  }
+}

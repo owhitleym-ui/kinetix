@@ -24,10 +24,10 @@ export function reset() {
   state = empty();
 }
 
-export function start({ exercise, target }) {
+export function start({ exercise, title, target }) {
   state = empty();
   state.exercise = exercise;
-  state.exercise_title = EX_TITLES[exercise] || exercise;
+  state.exercise_title = title || EX_TITLES[exercise] || exercise;
   state.reps_target = Number(target) || 0;
   state.started_at = Date.now();
 }

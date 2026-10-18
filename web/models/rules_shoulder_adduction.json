@@ -1,0 +1,127 @@
+{
+ "type": "rules",
+ "exercise": "shoulder_adduction",
+ "title": "Shoulder Horizontal Adduction",
+ "side": "right",
+ "segmenter": {
+  "mode": "auto",
+  "minFrames": 18,
+  "maxFrames": 300,
+  "pad": 6,
+  "calibFrames": 8,
+  "history": 150,
+  "start": 0.4,
+  "end": 0.2,
+  "rest": 0.1,
+  "restIs": "min",
+  "primary": "img:hand_across"
+ },
+ "primary": "hand_across",
+ "minAmp": 0.6,
+ "checks": [
+  {
+   "id": "hand_across@peak",
+   "signal": "hand_across",
+   "stat": "peak",
+   "kind": "rom",
+   "min": 0.3,
+   "max": null,
+   "code_low": "ERR_NOT_ACROSS",
+   "code_high": null,
+   "scale": 0.2,
+   "rest": -0.8,
+   "basis": "horizontal adduction (AAOS norm 0-135 deg) carries the hand across the body: it should pass well beyond the midline (0.3+ shoulder widths). Reaching the other shoulder (0.5) flagged 23% of reps physiotherapists scored as good, so the midline-plus criterion is used",
+   "label": "Hand past midline (shoulder widths)",
+   "unit": ""
+  },
+  {
+   "id": "elbow@peak",
+   "signal": "elbow",
+   "stat": "peak",
+   "kind": "form",
+   "min": 140,
+   "max": null,
+   "code_low": "ERR_BENT_ELBOW",
+   "code_high": null,
+   "scale": 10,
+   "rest": 0,
+   "basis": "arm kept fairly straight: elbow within 40 deg of full extension",
+   "label": "Elbow angle",
+   "unit": "\u00b0"
+  },
+  {
+   "id": "trunk_lean@drift",
+   "signal": "trunk_lean",
+   "stat": "drift",
+   "kind": "comp",
+   "min": null,
+   "max": 10,
+   "code_low": null,
+   "code_high": "ERR_TRUNK_LEAN",
+   "scale": 10,
+   "rest": 0,
+   "basis": "trunk side lean under 10 deg (trunk lean is the usual compensation for limited shoulder range)",
+   "label": "Lateral trunk lean",
+   "unit": "\u00b0"
+  }
+ ],
+ "cues": {
+  "ERR_BENT_ELBOW": "Keep your elbow straight.",
+  "ERR_NOT_ACROSS": "Bring your arm further across your body, toward the other shoulder.",
+  "ERR_TRUNK_LEAN": "Keep your trunk upright; don't lean to the side."
+ },
+ "short": {
+  "ERR_BENT_ELBOW": "Straight elbow",
+  "ERR_NOT_ACROSS": "Further across",
+  "ERR_TRUNK_LEAN": "Stay upright"
+ },
+ "names": {
+  "ERR_BENT_ELBOW": "Elbow not fully extended",
+  "ERR_NOT_ACROSS": "Limited horizontal adduction range",
+  "ERR_TRUNK_LEAN": "Lateral trunk lean"
+ },
+ "metrics": {
+  "good_videos": 30,
+  "poor_videos": 57,
+  "videos_without_reps": 18,
+  "people": 23,
+  "good_reps": 293,
+  "good_reps_pass": 0.894,
+  "good_reps_flagged_by_check": {
+   "hand_across@peak": 0.078,
+   "elbow@peak": 0.01,
+   "trunk_lean@drift": 0.024
+  },
+  "poor_reps": 540,
+  "poor_reps_flagged": 0.341,
+  "flags_on_good": {
+   "ERR_NOT_ACROSS": 23,
+   "ERR_TRUNK_LEAN": 5,
+   "ERR_BENT_ELBOW": 3
+  },
+  "flags_on_poor": {
+   "ERR_NOT_ACROSS": 103,
+   "ERR_BENT_ELBOW": 41,
+   "ERR_TRUNK_LEAN": 40
+  },
+  "reps_per_video": 10.0,
+  "measured_on_good": {
+   "hand_across@peak": [
+    0.25,
+    0.61,
+    1.14
+   ],
+   "elbow@peak": [
+    144.69,
+    163.74,
+    176.78
+   ],
+   "trunk_lean@drift": [
+    0.64,
+    1.86,
+    4.9
+   ]
+  }
+ },
+ "source": "Clinical thresholds (AAOS / Norkin & White norms, common compensation limits); false alarms measured on MobiPhysio videos physiotherapists scored >= 90 (Iqbal et al., Harvard Dataverse 2025, CC0)"
+}
