@@ -1,8 +1,8 @@
-# Compact REHAB26 training dataset
+# `dataset/` — compact REHAB26 training features
 
-`rehab26_features.npz` holds every labeled rep of REHAB26-ViewAngles (5 people, 3 exercises, 1,665 reps x 3
+`rehab26_features.npz` holds every labeled rep of REHAB26-ViewAngles (5 people, 3 exercises, 1,665 reps × 3
 cameras = 4,995 rep-views), already converted into the features the models use. `training/train_rehab26.py`
-retrains from it directly; no download needed.
+retrains from it directly; no download needed. See also `training/README.md`.
 
 | Array | Shape | Meaning |
 |---|---|---|

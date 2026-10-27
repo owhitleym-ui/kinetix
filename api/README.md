@@ -1,8 +1,10 @@
-# Kinetix ATP API
+# `api/` — Kinetix ATP API
 
-Logs sessions/reps to Oracle Autonomous DB and (optionally) uploads feature JSON to Object Storage.
+Express service on **:3001**. Logs accounts, sessions, and reps to Oracle Autonomous DB and (optionally) uploads feature JSON to Object Storage.
 
-The GenAI coach API stays in `backend/` (port 8000). This service is the ATP writer (port 3001).
+The GenAI coach API stays in `backend/` (:8000). The browser hits this service via `window.FORM_CHECK_ATP` / `auth.js` (default `http://127.0.0.1:3001`).
+
+Without a wallet and `.env`, the web app still runs in **demo mode** (localStorage). You only need this folder for real register/login and DB-backed session/rep writes.
 
 ## Setup
 
@@ -17,8 +19,10 @@ npm run migrate   # creates users + session_shares; adds patients.user_id
 npm start
 ```
 
-4. Serve the web app from the repo root (`npm run serve` / `node scripts/serve-web.mjs`).
-5. Open `login.html` / `register.html` to create patient or PT accounts. Patients can share sessions at `permissions.html`.
+From the repo root you can also use `npm run serve:atp` and `npm run migrate:atp`.
+
+4. Serve the web app from the repo root (`npm run serve`).
+5. Sign in from the app modal, or open `login.html` / `register.html`. Patients can share sessions at `permissions.html` (also mirrored under Patient settings).
 
 ## Object Storage (optional)
 
